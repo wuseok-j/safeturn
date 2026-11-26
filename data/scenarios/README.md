@@ -36,6 +36,10 @@
 | `if_wrong.risk_delta` | 틀렸을 때 올라가는 위험도 | 1~3 |
 | `reactions` | 캐릭터 반응 대사 (correct / wrong / unclear) | AI 오류 시 대신 쓰는 예비 대사이기도 함 |
 | `image` | 장면 이미지 파일 이름 | 이미지는 아직 없어도 됨 |
+| `image_includes_speaker` | 장면 이미지에 인물이 포함됐는지 여부 | 선택. 참이면 캐릭터 초상화가 겹쳐 표시되지 않음 |
+| `action_image` | 서버가 올바른 행동을 확인해 진행할 때 표시할 컷 | 선택. 이미지 경로는 `frontend/public/scenes` 기준 |
+
+단계의 선택 항목 `action_description`은 행동 컷의 대체 텍스트다. `action_alternatives`는 같은 행동 기준에서 별도 컷을 쓸 때 추가한다. 서버는 `evidence`에 지정한 기준의 확인 발언에 `contains`의 단어가 포함되면 해당 `image`, `description`을 사용한다. 시나리오 최상위의 선택 항목 `cleared_image`는 대피 완료 장면이다.
 
 ## 진행 규칙 (서버가 강제)
 

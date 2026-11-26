@@ -17,7 +17,9 @@ Report에 `feedback_source: "ai" | "basic"`을 추가한다. checks[].comment는
 
 Turn에 `situation: string`, `speaker: string`을 추가한다. 현재 선택 상태에 맞게 서버가 확정한 장면 설명과 발화자 이름이다. 시작·발언·이어하기 응답에 공통 포함된다. 왼쪽 장면 패널은 narrator 메시지를 추측해서 사용하지 않고 situation을 표시한다. 기존 필드는 유지한다.
 
-이미지는 `/scenes/{Turn.image}`에서 읽고 실패하면 이모지와 상황 설명을 표시한다. 이미지 파일은 `frontend/public/scenes/` 아래에 시나리오 경로와 동일하게 배치한다. 실제 장면 이미지 제작은 별도 남은 작업이다.
+장면 이미지는 `/scenes/{Turn.image}`에서 읽는다. `image_includes_speaker`가 참이면 장면 파일에 인물이 포함되어 있다. 인물이 포함되지 않은 장면이나 장면 파일 로드에 실패했을 때는 선택적 `speaker_image`를 이용할 수 있다. 대피한 세션에는 시나리오의 `cleared_image`를 현재 이미지로 내려준다.
+
+정확한 행동이 확인되어 다음 단계나 대피 결말에 도달한 발언 응답에는 `action_scene: { image, description, message_count }`가 포함될 수 있다. 경로는 `/scenes/` 기준이고 설명은 해당 컷의 대체 텍스트다. 클라이언트는 행동 컷을 3초 동안 보여주며 `messages` 앞에서 `message_count`개만 먼저 표시한다. 이어서 행동 결과와 다음 단계의 새 대화 또는 결말을 화면에 표시한다. 시작과 이어하기는 현재 장면을 곧바로 표시한다.
 
 기본 주소: `http://localhost:8000`
 서버 실행 후 `http://localhost:8000/docs` 에서 직접 눌러 볼 수 있다.

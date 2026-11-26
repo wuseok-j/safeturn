@@ -4,7 +4,8 @@
   "title": "오피스 화재 대피",
   "summary": "근무 중인 7층 사무실 탕비실에서 연기가 난다. 동료와 함께 건물 밖까지 안전하게 대피하라.",
   "category": "화재",
-  "thumbnail": "fire_office/stage1.svg",
+  "thumbnail": "fire_office/stage1-ai.jpg",
+  "cleared_image": "fire_office/cleared-ai.jpg",
   "estimated_minutes": 7,
   "role_doc": {
     "place": "도심 10층 오피스 빌딩 7층 사무실 (직원 약 30명)",
@@ -85,7 +86,18 @@
         "wrong": "그치? 별일 아니겠지… 근데 연기가 좀 많아지는 것 같은데?",
         "unclear": "응? 그래서 어떻게 하자는 거야?"
       },
-      "image": "fire_office/stage1.svg",
+      "image": "fire_office/stage1-ai.jpg",
+      "image_includes_speaker": true,
+      "action_image": "fire_office/action1-call-ai.jpg",
+      "action_description": "주변에 화재를 알리고 휴대전화로 119에 신고한다.",
+      "action_alternatives": [
+        {
+          "evidence": "alert",
+          "contains": ["비상벨", "발신기"],
+          "image": "fire_office/action1-ai.jpg",
+          "description": "주변에 화재를 알리고 비상벨을 누른다."
+        }
+      ],
       "rubric": [
         {
           "id": "warn",
@@ -172,7 +184,9 @@
         "wrong": "그치? 빨리 와, 문 닫힌다!",
         "unclear": "뭐? 엘리베이터 왔다니까, 탈 거야 말 거야?"
       },
-      "image": "fire_office/stage2.svg",
+      "image": "fire_office/stage2-ai.jpg",
+      "image_includes_speaker": true,
+      "action_image": "fire_office/action2-ai.jpg",
       "rubric": [
         {
           "id": "stairs",
@@ -279,7 +293,10 @@
         "wrong": "콜록콜록… 숨이… 너무 매워…",
         "unclear": "콜록… 뭐라고? 어떻게 하라고?"
       },
-      "image": "fire_office/stage3.svg",
+      "image": "fire_office/stage3-ai.jpg",
+      "image_includes_speaker": true,
+      "action_image": "fire_office/action3-ai.jpg",
+      "action_description": "두 사람이 소매로 코와 입을 가린 채 몸을 낮추고 계단을 내려간다.",
       "rubric": [
         {
           "id": "low",
@@ -380,7 +397,9 @@
         "wrong": "좋아, 연다!",
         "unclear": "그래서 열어, 말아? 빨리 정해!"
       },
-      "image": "fire_office/stage4.svg",
+      "image": "fire_office/stage4-ai.jpg",
+      "image_includes_speaker": true,
+      "action_image": "fire_office/action4-ai.jpg",
       "rubric": [
         {
           "id": "temperature",
@@ -460,7 +479,9 @@
         "wrong": "지금 건물 진입은 위험합니다. 화재 위치부터 알려 주십시오.",
         "unclear": "정확히 몇 층, 어디서 불이 났습니까?"
       },
-      "image": "fire_office/stage5.svg",
+      "image": "fire_office/stage5-ai.jpg",
+      "image_includes_speaker": true,
+      "action_image": "fire_office/action5-ai.jpg",
       "rubric": [
         {
           "id": "location",

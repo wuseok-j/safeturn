@@ -22,7 +22,7 @@ else:
     import shutil
     import time
     import urllib.request
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import expect, sync_playwright
     from demo_cases import ANSWERS
 
     output = ROOT / '.qa'
@@ -59,7 +59,13 @@ else:
                     page.get_by_role('button', name='준비 완료').click()
                     page.locator('.scene-heading').wait_for()
                     page.screenshot(path=str(output / f'{name}-{sid}-play.png'), full_page=True)
-                    assert page.locator('.scene-panel img').evaluate('(el) => el.complete && el.naturalWidth > 0')
+                    stage_frame = page.locator('[data-scene-kind="stage"]')
+                    caption = stage_frame.locator('.scene-caption')
+                    assert stage_frame.locator('img').evaluate('(el) => el.complete && el.naturalWidth > 0')
+                    expected_speaker = '박지훈' if sid == 'fire_office' else '이수아'
+                    expect(caption).to_have_text(expected_speaker)
+                    expect(stage_frame.locator('img')).to_have_attribute('src', f'/scenes/{sid}/stage1-ai.jpg')
+                    assert stage_frame.locator('.scene-portrait').count() == 0
                     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), '가로 넘침'
                     if name == 'mobile':
                         page.locator('.scene-panel summary').click()
@@ -92,16 +98,64 @@ else:
                             text = '엘리베이터는위험해 계단으로가자'
                         box = page.get_by_role('textbox', name='내가 할 행동')
                         box.fill(text)
-                        page.get_by_role('button', name='보내기', exact=True).click()
-                        page.wait_for_function('!document.querySelector(".typing")')
+                        if index == 0:
+                            page.evaluate('''() => {
+                                window.cutawayTiming = {};
+                                const observer = new MutationObserver(() => {
+                                    const active = document.querySelector('[data-scene-kind="action"]');
+                                    if (active && !cutawayTiming.started) cutawayTiming.started = performance.now();
+                                    if (!active && cutawayTiming.started) {
+                                        cutawayTiming.ended = performance.now();
+                                        observer.disconnect();
+                                    }
+                                });
+                                observer.observe(document.querySelector('.scene'), { childList: true, subtree: true, attributes: true });
+                            }''')
+                        with page.expect_response(lambda r: r.request.method == 'POST' and r.url.endswith('/messages')) as sent:
+                            page.get_by_role('button', name='보내기', exact=True).click()
+                        response = sent.value.json()
+                        action_frame = page.locator('[data-scene-kind="action"]')
+                        expect(action_frame).to_be_visible()
+                        action_file = 'action1-call-ai.jpg' if sid == 'fire_office' and index == 0 else f'action{index + 1}-ai.jpg'
+                        expect(action_frame.locator('img')).to_have_attribute('src', f'/scenes/{sid}/{action_file}')
+                        expect(page.locator('.stage-dots small')).to_have_text(f'{index + 1}/5')
+                        expect(page.get_by_role('button', name='보내기', exact=True)).to_be_disabled()
+                        chat = page.locator('.chat')
+                        count = response['action_scene']['message_count']
+                        expect(chat.locator('.mine:not(.dim) .bubble').last).to_have_text(text)
+                        expect(chat.locator('.bubble-row:not(.mine) .bubble').last).to_have_text(response['messages'][count - 1]['text'])
+                        next_narration = chat.locator('.narration, .system-note').filter(has_text=response['messages'][count]['text'])
+                        expect(next_narration).to_have_count(0)
+                        if name == 'desktop' and index == 0:
+                            action_frame.evaluate('(el) => Promise.all(el.getAnimations().map(animation => animation.finished))')
+                            page.screenshot(path=str(output / f'{name}-{sid}-action.png'))
+                        expect(page.locator('.typing')).to_have_count(0)
+                        expect(next_narration.last).to_be_visible()
+                        if index == 0:
+                            elapsed = page.evaluate('cutawayTiming.ended - cutawayTiming.started')
+                            assert 2900 <= elapsed < 4500, f'행동 컷 표시 시간 {elapsed}ms'
+                        if name == 'mobile' and index < 4:
+                            assert not page.locator('.scene-panel').evaluate('(el) => el.open')
                         if name == 'desktop' and index == 0:
                             page.reload()
                             page.locator('.resume-banner').get_by_role('button', name='이어하기', exact=True).click()
                             page.locator('.scene-heading').wait_for()
                             assert page.locator('.stage-dots small').inner_text() == '2/5'
+                            expect(caption).to_have_text(expected_speaker)
+                            expect(stage_frame.locator('img')).to_have_attribute('src', f'/scenes/{sid}/stage2-ai.jpg')
                             if sid == 'fire_office':
                                 stored = page.request.get(f'http://127.0.0.1:18765/api/sessions/{session_id}').json()
                                 assert sum(m['role'] == 'user' and m['text'] == text for m in stored['messages']) == 1
+                        if sid == 'fire_office' and index == 3:
+                            expect(caption).to_have_text('최민호 소방관')
+                            expect(stage_frame.locator('img')).to_have_attribute('src', f'/scenes/{sid}/stage5-ai.jpg')
+                    ending = page.locator('[data-scene-kind="cleared"] img')
+                    expect(ending).to_be_visible()
+                    expect(ending).to_have_attribute('src', f'/scenes/{sid}/cleared-ai.jpg')
+                    expect(page.locator('.scene-heading')).to_have_text('대피 완료')
+                    if name == 'desktop':
+                        ending.evaluate('(el) => el.decode()')
+                        page.screenshot(path=str(output / f'{name}-{sid}-ending.png'))
                     page.get_by_role('button', name='리포트 보기', exact=True).click()
                     page.locator('.report-head').wait_for()
                     assert page.locator('.score strong').inner_text() == '5'
