@@ -6,14 +6,22 @@ const MAX_LEN = 300;
 
 // adminToken 이 있으면 운영자 미리 플레이 (작성 중 시나리오도 시작 가능)
 // resumeId 가 있으면 새로 시작하지 않고 서버 DB에 저장된 플레이를 이어서 한다
-export default function Play({ scenario, onFinish, onExit, adminToken, resumeId }) {
+export default function Play({ scenario, onFinish, onExit, adminToken, resumeId, onBusyChange }) {
   const [turn, setTurn] = useState(null);        // 마지막으로 받은 Turn (상태값: 단계·위험도·status)
   const [messages, setMessages] = useState([]);  // 지금까지의 채팅 전체
   const [pending, setPending] = useState("");    // 서버 응답을 기다리는 내 말
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
+  const [brokenImage, setBrokenImage] = useState("");
   const started = useRef(false);
   const chatBox = useRef(null);
+  const inFlight = useRef(false);
+  const lastAttempt = useRef(null);
+
+  useEffect(() => {
+    onBusyChange?.(!!pending);
+    return () => onBusyChange?.(false);
+  }, [pending, onBusyChange]);
 
   // 화면이 열리면 플레이 시작 (개발 모드에서 두 번 실행되는 것을 막기 위해 ref 사용)
   useEffect(() => {
@@ -54,20 +62,33 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId 
   async function send(e) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || pending || turn?.status !== "playing") return;
+    if (!text || inFlight.current || turn?.status !== "playing") return;
+    inFlight.current = true;
+    const attempt = lastAttempt.current?.text === text ? lastAttempt.current
+      : { text, id: crypto.randomUUID(), stage: turn.stage };
+    lastAttempt.current = attempt;
     setPending(text);
     setInput("");
     setError("");
     try {
-      const t = await api.sendMessage(turn.session_id, text);
+      const t = await api.sendMessage(turn.session_id, text, attempt.id, attempt.stage);
       setTurn(t);
       setMessages((prev) => [...prev, ...t.messages]); // 서버가 내 말도 같이 돌려준다
       remember(t);
+      lastAttempt.current = null;
     } catch (err) {
       setInput(text); // 실패하면 쓴 문장을 되돌려 놓는다
       setError(err.message);
+      if (err.status === 409 || err.status === 400) {
+        try {
+          const latest = await api.resumeSession(turn.session_id);
+          setTurn(latest); setMessages(latest.messages); remember(latest);
+          lastAttempt.current = null;
+        } catch { /* 기존 오류 안내 유지 */ }
+      }
     } finally {
       setPending("");
+      inFlight.current = false;
     }
   }
 
@@ -78,7 +99,7 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId 
       {/* 상단: 시나리오 제목, 단계 진행, 위험도 */}
       <div className="play-status">
         <div className="play-title">
-          <button className="ghost" onClick={onExit}>← 목록</button>
+          <button className="ghost" onClick={onExit} disabled={!!pending}>← 목록</button>
           <strong>{scenario.title}</strong>
         </div>
         {turn && (
@@ -89,21 +110,29 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId 
         )}
       </div>
 
-      {/* 장면 패널: 장면 이미지(turn.image)가 준비되기 전까지는 이모지 + 단계 이름. 위험도가 오르면 색이 붉어진다 */}
-      {turn && (
-        <div className={`scene risk-${riskLevel(turn.risk, turn.max_risk)}`}>
-          <div className="scene-emoji">{categoryEmoji(scenario.category)}</div>
-          <div>
-            <div className="scene-stage">STAGE {turn.stage} / {turn.total_stages}</div>
-            <div className="scene-title">{turn.stage_title}</div>
-          </div>
-        </div>
-      )}
-
       <div className="mission-strip">{scenario.briefing?.mission || "동료와 안전하게 대피하기"}
-        {turn && <span>행동 시도 기회 {turn.attempts_left}회 · 질문은 자유</span>}
+        {turn && <span>{ended ? "플레이 종료" : `행동 시도 기회 ${turn.attempts_left}회 · 질문·대화는 단계당 최대 6회`}</span>}
       </div>
       {!!turn?.conditions?.length && <div className="condition-trail" aria-label="이전 선택의 영향">{turn.conditions.map((label, i) => <span key={i}>{label}</span>)}</div>}
+      <div className={`play-workspace ${!turn ? "is-loading" : ""}`}>
+      {turn && (
+        <details className="scene-panel" open>
+          <summary>현재 장면 · {turn.stage_title}<span>펼치기 / 접기</span></summary>
+          <div className="scene-content">
+            <div className={`scene risk-${riskLevel(turn.risk, turn.max_risk)}`}>
+              {turn.image && brokenImage !== turn.image
+                ? <img src={`/scenes/${turn.image.split("/").map(encodeURIComponent).join("/")}`} alt={`${turn.stage_title} 장면`} onError={() => setBrokenImage(turn.image)} />
+                : <div className="scene-placeholder"><span aria-hidden="true">{categoryEmoji(scenario.category)}</span><small>상황을 읽고 직접 판단해 보세요</small></div>}
+            </div>
+            <div className="scene-stage">STAGE {turn.stage} / {turn.total_stages}</div>
+            <h2 className="scene-heading">{turn.stage_title}</h2>
+            <p className="scene-description">{turn.situation}</p>
+            <p className="scene-guide">선택한 행동은 다음 상황에 남습니다. 결과에서 내 발언과 판단 근거를 확인할 수 있습니다.</p>
+          </div>
+        </details>
+      )}
+      <section className="dialogue-panel" aria-label="대화 플레이">
+      <div className="dialogue-heading"><strong>대화</strong><span>{turn?.speaker || "상황을 준비하고 있습니다"}</span></div>
       {/* 채팅 */}
       <div className="chat" ref={chatBox} role="log" aria-label="상황과 대화" aria-live="polite">
         {messages.map((m, i) => <Bubble key={i} m={m} />)}
@@ -118,6 +147,8 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId 
         )}
       </div>
 
+      {!turn && !error && <div className="loading-note" role="status">{resumeId ? "이전 대화를 불러오는 중…" : "현장 상황을 준비하는 중…"}</div>}
+
       {/* 입력창 또는 종료 배너 */}
       {ended ? (
         <div className={`end-banner ${turn.status}`}>
@@ -129,7 +160,9 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId 
           <input
             value={input}
             aria-label="내가 할 행동"
+            aria-describedby="composer-help"
             onChange={(e) => setInput(e.target.value.slice(0, MAX_LEN))}
+            onKeyDown={(e) => { if (e.key === 'Enter' && e.nativeEvent.isComposing) e.preventDefault(); }}
             placeholder={turn ? "행동을 말하거나, 궁금한 걸 물어보세요" : "준비 중…"}
             disabled={!turn || !!pending}
             autoFocus
@@ -138,6 +171,9 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId 
           <button className="primary" disabled={!turn || !!pending || !input.trim()}>보내기</button>
         </form>
       )}
+      {!ended && <p id="composer-help" className="composer-help">행동은 구체적으로, 질문은 자유롭게. 응답 대기 중에는 중복 전송할 수 없습니다.</p>}
+      </section>
+      </div>
     </main>
   );
 }

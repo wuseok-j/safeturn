@@ -1,9 +1,13 @@
-# MIA — 재난·안전 대응 롤플레잉 🚒
+# 세이프턴 SafeTurn — 재난·안전 대응 롤플레잉
+
+세이프턴은 대화 한 턴과 판단 하나가 다음 상황에 영향을 주는 재난 대응 연습 서비스입니다.
 
 > **문제:** 안전교육은 대부분 영상 시청이라, 실제 상황에서 판단해 보는 연습을 할 수 없다.
 > **해결:** 화재·지진 등 상황 속 인물과 채팅하며 직접 판단하고, 행동별 피드백을 받는다.
 
 운영자(교사·기업 안전 담당자)가 재난 시나리오를 올리고, 이용자(학생·직원)가 시나리오 속 인물과 채팅하며 판단해 본 뒤, 끝나면 행동별 평가 리포트를 받는 생성형 AI 서비스.
+
+**최종 로컬 실행:** `start-local.cmd` → http://127.0.0.1:8000 . 인터넷 없이 시연할 때는 `.\start-local.cmd offline`으로 실행한다. 상세 설정·시연 순서·완주 예시는 [SUBMISSION.txt](SUBMISSION.txt)를 따른다. 제출 검증은 `backend\.venv\Scripts\python.exe -X utf8 tools/verify_release.py --ui`, 비밀값을 제외한 ZIP 생성은 같은 Python으로 `tools/package_submission.py`를 실행한다.
 
 ## 구조
 
@@ -22,7 +26,7 @@
 | 위치 | 내용 |
 |---|---|
 | `backend/app/harness.py` | 하네스: 단계 진행·위험도·판정 검증 (핵심) |
-| `backend/app/ai.py` | 행동 판정 API 호출 (키 없으면 mock), 종료 코멘트는 고정 응답 |
+| `backend/app/ai.py` | Gemini 행동 판정·종료 피드백 (키 없음·생성 실패 시 기본 응답) |
 | `backend/app/safety.py` | 인젝션·부적절 표현 1차 필터 |
 | `backend/app/main.py`, `schemas.py` | API 서버, 요청·응답 형식 |
 | `backend/play_test.py` | 시나리오 자동 플레이 테스트 |
@@ -35,9 +39,21 @@
 
 ## 선택이 남는 플레이
 
+2026-11-25: 화재·학교 지진 두 시나리오, 원본 SVG 장면 10개, PC 2단/모바일 접기 화면, 실제 발언을 인용하는 AI 리포트를 포함한다. 위험도는 서버에 등록된 위험 행동이 확인될 때만 증가한다. 미등록 위험 표현은 추가 검수 대상이다.
+
 목록 → 임무 브리핑 → 채팅 → 판단 복기로 진행한다. 서버가 필수 행동을 항목별로 확인하며, 여러 발언에 걸쳐 근거를 모을 수 있다. 단계에서 도움을 받았는지에 따라 다음 장면이 바뀐다. 리포트는 실제 발언, 위험도 변화, 충족·미확인 행동과 출처를 보여준다. 건물 밖 도착 여부와 행동 충족도는 별개다.
 
 `backend/decision_test.py`에서 AI의 잘못된 성공 제안, 부분 행동, 도움 경로, 장애 시 기회 보존 등을 API 키 없이 검증한다. 표현 판정은 제한된 패턴 기반이며 의미 이해나 안전 역량 인증을 대체하지 않는다.
+
+최종 안정화에는 요청 id 기반 재전송 중복 방지, 세션별 직렬화, 메모리 세션의 만료 확인, 부정문·질문 판정 보강이 포함된다. 총평과 점수는 서버 기록에서 만들고, AI는 단계별 참고 코멘트를 제공한다. 로컬 단일 프로세스 사용 범위다.
+
+### 개발 검증
+
+backend에서 `pip install -r requirements-dev.txt`로 화면 검증 도구를 설치한다. `content_test.py`는 두 시나리오의 CMS 검사·행동 기준·실제 장면 파일을, `report_ai_test.py`는 피드백의 인용·실패 복구·점수 불변성을 검증한다. 모두 API 비용 없이 실행한다.
+
+프론트에서 `npm.cmd run build` 후 backend에서 `python -X utf8 ui_check.py`를 실행하면 설치된 Microsoft Edge의 헤드리스 모드로 PC/모바일 완주·새로고침 이어하기·전송 오류 복원·좁은 화면 높이를 확인한다. 임시 DB와 mock AI를 사용하고 결과 이미지는 Git 제외된 `.qa/`에 저장한다. 로컬 18765 포트가 비어 있어야 한다.
+
+`python -X utf8 final_rehearsal.py`는 **실제 API 비용이 발생**하는 두 시나리오 리허설이다. `--report-only`를 붙이면 플레이는 mock, 종료 피드백만 실제 Gemini로 확인한다. 장면 SVG 재생성은 루트에서 `python tools/build_scene_assets.py`로 실행한다.
 
 ## 처음 받았을 때
 
@@ -85,7 +101,7 @@ python first_run.py
 ```
 캐릭터 대사 1개와 토큰 사용량·예상 비용이 출력되면 성공.
 
-Gemini 설정은 루트 `.env`의 `LLM_PROVIDER=gemini`, `GEMINI_API_KEY`, `LLM_MODEL_FAST`를 사용한다. 연결 확인 모델은 `gemini-3.1-flash-lite`다. 키 없이 실행하거나 `LLM_PROVIDER=mock`이면 오프라인 판정을 사용한다. `LLM_API_KEY`는 더 이상 사용하지 않는다. 종료 평가 코멘트는 여전히 고정 문구다.
+Gemini 설정은 루트 `.env`의 `LLM_PROVIDER=gemini`, `GEMINI_API_KEY`, `LLM_MODEL_FAST`를 사용한다. 연결 확인 모델은 `gemini-3.1-flash-lite`다. 키 없이 실행하거나 `LLM_PROVIDER=mock`이면 오프라인 판정을 사용한다. `LLM_API_KEY`는 더 이상 사용하지 않는다. 종료 피드백은 `LLM_MODEL_SMART`로 생성하며 실패 시 기본 문구를 유지한다.
 
 가격 변수가 0이면 비용 미설정이다. 무료라는 뜻이 아니며, `first_run.py`는 가격을 설정했을 때만 예상 비용을 계산한다. 사용 가능 모델 조회는 `python model_check.py`로 실행한다.
 

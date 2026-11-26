@@ -1,6 +1,6 @@
 """프론트와 주고받는 데이터 형식. 바꿀 때는 docs/api-spec.md 도 같이 수정한다."""
 from typing import Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Character(BaseModel):
@@ -28,6 +28,16 @@ class StartRequest(BaseModel):
 
 class MessageRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=300)
+    request_id: Optional[str] = Field(default=None, min_length=8, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$')
+    expected_stage: Optional[int] = Field(default=None, ge=1, le=100)
+
+    @field_validator('text')
+    @classmethod
+    def nonblank(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError('내용을 입력해 주세요.')
+        return value
 
 
 class Message(BaseModel):
@@ -42,6 +52,8 @@ class Turn(BaseModel):
     messages: list[Message]
     stage: int            # 현재 단계 번호 (1부터)
     stage_title: str
+    situation: str = ""
+    speaker: str = ""
     total_stages: int
     risk: int
     max_risk: int
@@ -85,6 +97,10 @@ class CheckResult(BaseModel):
     user_actions: list[str] = Field(default_factory=list)
     attempts: int = 0
     evidence: list[Evidence] = Field(default_factory=list)
+    reason: str = ''
+    reason_code: str = ''
+    missing_actions: list[str] = Field(default_factory=list)
+    action_reviews: list[dict] = Field(default_factory=list)
 
 
 class Report(BaseModel):
@@ -101,3 +117,6 @@ class Report(BaseModel):
     timeline: list[Decision] = Field(default_factory=list)
     conditions: list[str] = Field(default_factory=list)
     review_points: list[str] = Field(default_factory=list)
+    feedback_source: Literal['ai', 'basic'] = 'basic'
+    assessment_version: int = 1
+    assessment_note: str = ''

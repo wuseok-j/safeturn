@@ -39,9 +39,11 @@ export default function Report({ sessionId, onRetry, onHome }) {
             <span className="dot">·</span> 최종 위험도 {Math.min(report.risk, report.max_risk)}/{report.max_risk}
           </p>
           {report.summary && <p className="summary">{report.summary}</p>}
+          <p className="muted">{report.feedback_source === "ai" ? "AI 피드백" : "기본 피드백"} · 행동 충족도는 서버 기록 기준이며 안전 역량 인증이 아닙니다.</p>
         </div>
       </section>
 
+      {report.assessment_note && <p className="assessment-note" role="note">{report.assessment_note}</p>}
       <section className="review-focus"><h2 className="section-title">다음 연습에서 집중할 판단</h2>
         <p>{report.review_points?.length ? report.review_points.join(" · ") : "모든 단계의 행동 기준을 확인했습니다. 다른 표현과 판단 순서로 다시 연습해 보세요."}</p>
       </section>
@@ -64,17 +66,21 @@ export default function Report({ sessionId, onRetry, onHome }) {
               </div>
               <span className="check-label">{RESULT[c.result].label}</span>
             </div>
-            {c.comment && <p className="check-comment">{c.comment}</p>}
+            {c.reason && <div className={`check-reason ${c.result}`}><b>{c.result === 'correct' ? '통과 이유' : c.result === 'not_reached' ? '평가하지 않은 이유' : '보완이 필요한 이유'}</b><p>{c.reason}</p>
+              {c.result === 'failed' && !!c.missing_actions?.length && <><b>다음에 추가할 행동</b><ul>{c.missing_actions.map(label => <li key={label}>{label}</li>)}</ul></>}
+            </div>}
             {!!c.evidence?.length && <ul className="evidence-list">{c.evidence.map(item => <li key={item.id}>
-              <strong>{item.met ? "확인" : "미확인"} · {item.label}</strong>
+              <strong>{item.met ? "✓ 확인한 행동" : "! 확인하지 못한 행동"} · {item.label}</strong>
               {item.quote && <blockquote>{item.quote}</blockquote>}
-              {item.sources.map(source => <a key={source.url} href={source.url} target="_blank" rel="noreferrer">행동 기준 근거 ↗</a>)}
+              {item.sources.map(source => <a key={source.url} title={source.name} href={source.url} target="_blank" rel="noreferrer">행동 기준 근거 보기 ↗</a>)}
             </li>)}</ul>}
             <div className="action-evidence">
               <b>내 판단 기록 · {c.attempts || 0}회</b>
-              {c.user_actions?.length ? c.user_actions.map((text, i) => <blockquote key={i}>{text}</blockquote>) : <p>평가할 발언이 없습니다.</p>}
+              {c.action_reviews?.length ? c.action_reviews.map((action, i) => <div className={`action-review ${action.verdict}`} key={i}><blockquote>{action.text}</blockquote><p>{action.note}</p></div>)
+                : c.user_actions?.length ? c.user_actions.map((text, i) => <blockquote key={i}>{text}</blockquote>) : <p>평가할 발언이 없습니다.</p>}
             </div>
             <p className="check-answer"><b>올바른 행동</b> {c.correct_action}</p>
+            {c.comment && <details className="ai-reference"><summary>{report.feedback_source === 'ai' ? 'AI 참고 코멘트' : '기본 코멘트'} 보기</summary><p className="check-comment">{c.comment}</p></details>}
           </li>
         ))}
       </ol>

@@ -72,7 +72,11 @@ def evaluate(scenario: dict, results: dict[int, str], transcript: list[dict]) ->
     통과/실패를 바꾸는 권한은 없다. 이용자의 실제 발언을 근거로 칭찬·보완점을 쓴다.
     실패 시 {"summary": "", "comments": {}} (서버가 빈 칸으로 표시)
     """
-    # TODO(김채희): 실제 API 호출로 교체. 아래는 가짜 응답.
+    if _api_key():
+        generated = gemini.evaluate(scenario, results, transcript)
+        if generated:
+            return generated
+    # 키 없음·API 장애·잘못된 근거 인용이면 읽을 수 있는 기본 피드백 유지.
     comments = {}
     for ev in scenario["evaluation"]:
         r = results.get(ev["stage"])
@@ -86,4 +90,7 @@ def evaluate(scenario: dict, results: dict[int, str], transcript: list[dict]) ->
     return {
         "summary": f"{len(results)}단계 중 {passed}단계가 규칙 기반 판정을 통과했습니다. 키워드 일치에 따른 연습 기록이며 실제 안전 역량을 인증하지 않습니다.",
         "comments": comments,
+        "feedback_source": "basic",
+        "model": "mock" if not _api_key() else os.getenv("LLM_MODEL_SMART", "gemini-3.1-flash-lite"),
+        "reason": "mock" if not _api_key() else "fallback",
     }

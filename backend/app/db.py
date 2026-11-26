@@ -131,7 +131,8 @@ def save_session(s, saved_messages: int, saved_decisions: int) -> tuple[int, int
     """
     ts = now()
     state = {"stage_results": s.stage_results, "actions": s.actions,
-             "evidence": s.evidence, "conditions": s.conditions}
+             "evidence": s.evidence, "conditions": s.conditions,
+             "processed_requests": s.processed_requests}
     with _write_lock, connect() as conn:
         conn.execute(
             """INSERT INTO sessions (id, scenario_id, scenario_version, status, stage_index, risk, turns_in_stage,
@@ -183,8 +184,14 @@ def load_session(session_id: str) -> dict | None:
 def _expired(updated_at: str) -> bool:
     try:
         return datetime.fromisoformat(updated_at) < datetime.now(timezone.utc) - timedelta(hours=SESSION_TTL_HOURS)
-    except ValueError:
+    except (ValueError, TypeError):
         return True
+
+
+def session_expired(session_id: str) -> bool:
+    with connect() as conn:
+        row = conn.execute('SELECT status, updated_at FROM sessions WHERE id=?', (session_id,)).fetchone()
+    return bool(row and row['status'] == 'playing' and _expired(row['updated_at']))
 
 
 def save_report(session_id: str, report: dict) -> None:
