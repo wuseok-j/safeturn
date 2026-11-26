@@ -39,13 +39,35 @@ def observe(stage: dict, text: str) -> list[str]:
     for criterion in stage.get("rubric", []):
         if any(re.search(p, value) for p in criterion.get("exclude", [])):
             continue
-        if all(any(re.search(p, value) for p in group) for group in criterion["patterns"]):
+        direct = all(any(_affirmed(p, value) for p in group) for group in criterion["patterns"])
+        concept = criterion.get('concept')
+        # 이미 시작한 세션의 기존 시나리오 사본도 같은 의미의 표현을 인정한다.
+        legacy_lift = criterion.get('id') in ('stop_lift', 'no_lift') and '엘리베이터' in criterion.get('label', '')
+        alternative = (concept == 'avoid_elevator' or legacy_lift) and _elevator_alternative(stage, value)
+        if direct or alternative:
             found.append(criterion["id"])
     return found
 
 
+def _affirmed(pattern, value):
+    for match in re.finditer(pattern, value):
+        # '막지 마', '보호하지 않아도 돼'를 '막기/보호하기'로 인정하지 않는다.
+        # '타지 마'처럼 금지 자체가 행동 기준인 패턴은 이미 부정 표현까지 매칭하므로 유지된다.
+        if re.match(r'^[가-힣]{0,3}(지(?:마|말|않)|필요없|안할|안해|안하|못해)', value[match.end():]):
+            continue
+        return True
+    return False
+
+
+def _elevator_alternative(stage, value):
+    return ('계단' in stage.get('correct_action', '')
+            and _affirmed(r'엘리베이터.{0,6}(위험|대신|말고)', value)
+            and _affirmed(r'계단.{0,8}(가자|가요|갈게|갑시다|이동|내려|대피|이용|선택)', value)
+            and not dangerous(stage, value))
+
+
 def dangerous(stage: dict, text: str) -> bool:
-    value = compact(text)
+    value = action_text(text)
     for pattern in stage.get("danger_patterns", []):
         for match in re.finditer(pattern, value):
             suffix = value[match.end():]

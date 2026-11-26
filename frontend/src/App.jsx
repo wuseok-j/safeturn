@@ -1,17 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ScenarioList from "./pages/ScenarioList.jsx";
 import Play from "./pages/Play.jsx";
 import Report from "./pages/Report.jsx";
 import Briefing from "./pages/Briefing.jsx";
 import AdminHome from "./pages/AdminHome.jsx";
 import AdminEditor from "./pages/AdminEditor.jsx";
-import { adminSession } from "./api.js";
+import { adminSession, api } from "./api.js";
 
 // 화면을 상태값 하나로 전환한다. (라우터 라이브러리 없이 단순하게)
 // 이용자:  list → briefing → play → report
 // 운영자:  admin(목록) → adminEdit(편집) → preview(미리 플레이) → report
 export default function App() {
   const [screen, setScreen] = useState({ name: "list" });
+  const [busy, setBusy] = useState(false);
+  const [runtime, setRuntime] = useState(null);
+  useEffect(() => { api.health().then(setRuntime).catch(() => setRuntime({ mode: 'unavailable' })); }, []);
   const isAdmin = screen.name.startsWith("admin") || screen.preview;
 
   // 운영자 화면에서 미리 플레이할 때 넘길 시나리오 정보 (Play 가 쓰는 필드만)
@@ -20,10 +23,11 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <button className="brand" onClick={() => setScreen({ name: "list" })}>
-          🚒 MIA <span>재난 대응 롤플레잉</span>
+        <button className="brand" disabled={busy} onClick={() => setScreen({ name: "list" })}>
+          세이프턴 <span>SafeTurn · 재난 대응 롤플레잉</span>
         </button>
-        <button className={`topbar-link ${isAdmin ? "active" : ""}`} onClick={() => setScreen({ name: "admin" })}>운영자</button>
+        <div className="runtime-actions"><span className={`runtime-mode ${runtime?.mode || ''}`}>{runtime?.mode === 'gemini' ? 'Gemini 모드' : runtime?.mode === 'mock' ? '오프라인 체험' : runtime?.mode === 'unavailable' ? '서버 연결 확인 필요' : '연결 확인 중'}</span>
+        <button disabled={busy} className={`topbar-link ${isAdmin ? "active" : ""}`} onClick={() => setScreen({ name: "admin" })}>운영자</button></div>
       </header>
 
       {screen.name === "list" && (
@@ -43,6 +47,7 @@ export default function App() {
           scenario={screen.scenario}
           adminToken={screen.preview ? adminSession.load() : undefined}
           resumeId={screen.resumeId}
+          onBusyChange={setBusy}
           onFinish={(sessionId) => setScreen({ name: "report", sessionId, scenario: screen.scenario, preview: screen.preview })}
           onExit={() => setScreen(screen.preview ? { name: "adminEdit", id: screen.scenario.id } : { name: "list" })}
         />

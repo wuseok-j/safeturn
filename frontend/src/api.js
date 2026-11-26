@@ -29,14 +29,15 @@ async function request(path, options = {}, token) {
 }
 
 export const api = {
+  health: () => request('/health'),
   listScenarios: () => request("/scenarios"),
   // adminToken 을 주면 작성 중(draft) 시나리오도 시작된다 (운영자 미리 플레이)
   startSession: (scenarioId, adminToken) =>
     request("/sessions", { method: "POST", body: JSON.stringify({ scenario_id: scenarioId }) }, adminToken),
   // 이어하기: 지금까지의 대화 전체 + 현재 상태 (서버 DB에서 불러옴)
   resumeSession: (sessionId) => request(`/sessions/${sessionId}`),
-  sendMessage: (sessionId, text) =>
-    request(`/sessions/${sessionId}/messages`, { method: "POST", body: JSON.stringify({ text }) }),
+  sendMessage: (sessionId, text, requestId, expectedStage) =>
+    request(`/sessions/${sessionId}/messages`, { method: "POST", body: JSON.stringify({ text, request_id: requestId, expected_stage: expectedStage }) }),
   getReport: (sessionId) => request(`/sessions/${sessionId}/report`),
 };
 

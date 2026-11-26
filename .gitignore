@@ -15,6 +15,9 @@ dist/
 .vite/
 
 # DB·로그
+.qa/
+outputs/
+*.hwp
 *.db
 *.sqlite3
 logs/

@@ -16,7 +16,7 @@ export default function ScenarioList({ onSelect, onResume }) {
   return (
     <main className="page">
       <section className="hero">
-        <div className="eyebrow">MIA · DECISION LAB</div>
+        <div className="eyebrow">SAFETURN · 재난 대응 판단 연습</div>
         <h1>당신의 한마디가,<br />다음 상황을 바꿉니다.</h1>
         <p>동료를 설득하고, 경로를 판단하고, 내 선택의 근거를 복기하는 재난 대응 연습.</p>
         <div className="feature-grid">
@@ -49,7 +49,7 @@ export default function ScenarioList({ onSelect, onResume }) {
       <div className="card-grid">
         {scenarios?.map((sc) => (
           <article key={sc.id} className="scenario-card">
-            <div className="thumb">{categoryEmoji(sc.category)}</div>
+            <ScenarioCover scenario={sc} />
             <div className="card-body">
               <span className="tag">{sc.category}</span>
               <h2>{sc.title}</h2>
@@ -66,4 +66,11 @@ export default function ScenarioList({ onSelect, onResume }) {
       </div>
     </main>
   );
+}
+
+function ScenarioCover({ scenario }) {
+  const [broken, setBroken] = useState(false);
+  return <div className="thumb">{scenario.thumbnail && !broken
+    ? <img src={`/scenes/${scenario.thumbnail.split('/').map(encodeURIComponent).join('/')}`} alt={`${scenario.title} 장면 미리보기`} onError={() => setBroken(true)} />
+    : categoryEmoji(scenario.category)}</div>;
 }

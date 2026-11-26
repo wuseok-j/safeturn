@@ -120,7 +120,7 @@ export default function AdminHome({ onEdit, onPreview }) {
           ))}
         </tbody>
       </table>
-      <p className="muted small">이용 현황은 DB(<code>backend/mia.db</code>)에 저장된 전체 기록입니다. AI 수치는 실제 AI 호출만 셉니다 (가짜 AI 제외).</p>
+      <p className="muted small">이용 현황은 서버에 저장된 전체 플레이 기록입니다. AI 수치는 실제 AI 호출만 셉니다 (오프라인 체험 제외).</p>
 
       <section className="admin-card">
         <h2>새 시나리오</h2>

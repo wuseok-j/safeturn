@@ -4,7 +4,7 @@
   "title": "오피스 화재 대피",
   "summary": "근무 중인 7층 사무실 탕비실에서 연기가 난다. 동료와 함께 건물 밖까지 안전하게 대피하라.",
   "category": "화재",
-  "thumbnail": "fire_office/thumbnail.png",
+  "thumbnail": "fire_office/stage1.svg",
   "estimated_minutes": 7,
   "role_doc": {
     "place": "도심 10층 오피스 빌딩 7층 사무실 (직원 약 30명)",
@@ -85,7 +85,7 @@
         "wrong": "그치? 별일 아니겠지… 근데 연기가 좀 많아지는 것 같은데?",
         "unclear": "응? 그래서 어떻게 하자는 거야?"
       },
-      "image": "fire_office/stage1_smoke_pantry.png",
+      "image": "fire_office/stage1.svg",
       "rubric": [
         {
           "id": "warn",
@@ -172,7 +172,7 @@
         "wrong": "그치? 빨리 와, 문 닫힌다!",
         "unclear": "뭐? 엘리베이터 왔다니까, 탈 거야 말 거야?"
       },
-      "image": "fire_office/stage2_elevator.png",
+      "image": "fire_office/stage2.svg",
       "rubric": [
         {
           "id": "stairs",
@@ -204,7 +204,8 @@
           ],
           "source_indices": [
             1
-          ]
+          ],
+          "concept": "avoid_elevator"
         }
       ],
       "danger_patterns": [
@@ -220,7 +221,10 @@
         "missed": "안내 직원이 엘리베이터 앞의 두 사람을 멈춰 세워 계단으로 안내합니다."
       },
       "partial_reply": "어, 알았어… 근데 그럼 이제 어떻게 해? 엘리베이터 거의 다 왔는데!",
-      "facts": ["엘리베이터 2대 중 1대가 7층으로 올라오는 중이다.", "복도에 사람들이 모여 웅성거린다."],
+      "facts": [
+        "엘리베이터 2대 중 1대가 7층으로 올라오는 중이다.",
+        "복도에 사람들이 모여 웅성거린다."
+      ],
       "variants": [
         {
           "when": {
@@ -275,7 +279,7 @@
         "wrong": "콜록콜록… 숨이… 너무 매워…",
         "unclear": "콜록… 뭐라고? 어떻게 하라고?"
       },
-      "image": "fire_office/stage3_smoky_stairs.png",
+      "image": "fire_office/stage3.svg",
       "rubric": [
         {
           "id": "low",
@@ -324,7 +328,10 @@
         "missed": "안내 직원의 도움으로 다음 계단참에 도착했습니다. 두 사람은 한동안 기침하며 말을 고릅니다."
       },
       "partial_reply": "콜록… 그래, 그거라도 하자. 근데 이대로 내려가도 괜찮을까?",
-      "facts": ["5층부터 아래로 연기가 짙다.", "다른 직원 몇 명도 앞뒤로 계단을 내려가고 있다."],
+      "facts": [
+        "5층부터 아래로 연기가 짙다.",
+        "다른 직원 몇 명도 앞뒤로 계단을 내려가고 있다."
+      ],
       "variants": [
         {
           "when": {
@@ -373,7 +380,7 @@
         "wrong": "좋아, 연다!",
         "unclear": "그래서 열어, 말아? 빨리 정해!"
       },
-      "image": "fire_office/stage4_door.png",
+      "image": "fire_office/stage4.svg",
       "rubric": [
         {
           "id": "temperature",
@@ -402,7 +409,10 @@
         "missed": "위험한 문 앞에서 더 진행하지 못했습니다. 도착한 안내원이 두 사람을 멈추고 다른 계단으로 안내합니다."
       },
       "partial_reply": "그래서 열어, 말아? 빨리 정해!",
-      "facts": ["복도로 나가는 문은 금속 방화문이다.", "위층으로 돌아가면 반대편 계단으로 갈 수 있다."],
+      "facts": [
+        "복도로 나가는 문은 금속 방화문이다.",
+        "위층으로 돌아가면 반대편 계단으로 갈 수 있다."
+      ],
       "variants": [
         {
           "when": {
@@ -450,7 +460,7 @@
         "wrong": "지금 건물 진입은 위험합니다. 화재 위치부터 알려 주십시오.",
         "unclear": "정확히 몇 층, 어디서 불이 났습니까?"
       },
-      "image": "fire_office/stage5_outside.png",
+      "image": "fire_office/stage5.svg",
       "rubric": [
         {
           "id": "location",
@@ -495,7 +505,10 @@
       },
       "partial_reply": "확인했습니다. 다른 전달할 내용은 없습니까?",
       "question_reply": "지금은 안전이 우선입니다. 아시는 내용부터 말씀해 주십시오.",
-      "facts": ["소방차 2대가 도착했다.", "팀장이 공원에서 직원 인원을 확인하고 있다."],
+      "facts": [
+        "소방차 2대가 도착했다.",
+        "팀장이 공원에서 직원 인원을 확인하고 있다."
+      ],
       "variants": [
         {
           "when": {
@@ -561,5 +574,7 @@
       "대피 판단",
       "상황 보고"
     ]
-  }
+  },
+  "status": "published",
+  "updated_at": "2026-11-18T19:58:11+09:00"
 }

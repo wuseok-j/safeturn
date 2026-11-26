@@ -160,7 +160,7 @@ class DecisionTests(unittest.TestCase):
 
     def test_ai_intent_cannot_hide_wrong_choice(self):
         with self.ai(verdict='wrong', intent='chat', reply='그래 같이 기다리자'):
-            self.say('좀 더 지켜보자')
+            self.say('그냥 기다리자')  # 서버에 등록된 위험 행동은 chat으로 숨길 수 없음
         self.assertEqual(self.session.turns_in_stage, 1)
         self.assertGreater(self.session.risk, 0)
 
@@ -206,6 +206,18 @@ class DecisionTests(unittest.TestCase):
         st = self.session.scenario['stages'][4]
         self.assertFalse(rules.dangerous(st, '노트북 가지러 들어가지 마'))
         self.assertTrue(rules.dangerous(st, '노트북 가지러 들어가지 마. 그래도 같이 들어가자'))
+
+    def test_current_scene_api_matches_variant_and_resume(self):
+        for _ in range(3):
+            self.say('음...')
+        sid = self.session.id
+        response = self.client.get(f'/sessions/{sid}')
+        self.assertEqual(response.status_code, 200)
+        turn = response.json()
+        self.assertEqual(turn['situation'], harness.current_stage(self.session)['situation'])
+        self.assertIn('다른 직원', turn['situation'])
+        self.assertEqual(turn['speaker'], '박지훈')
+        self.assertNotIn('rubric', turn)
 
 
 if __name__ == '__main__':
