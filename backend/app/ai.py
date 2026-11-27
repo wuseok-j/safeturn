@@ -5,11 +5,29 @@ The harness owns progression, risk, evidence and results.
 """
 from __future__ import annotations
 import os
+import re
 from pathlib import Path
 from dotenv import load_dotenv
-from . import gemini
+from . import gemini, rules
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
+_ACTION_END = re.compile(r'(?:자|보자|을게|할게|갈게|올게|볼게|을래|할래|겠어|겠습니다|해줘|해봐)$')
+_HESITATION = re.compile(r'생각(좀|을|해|하)|고민|망설|모르겠|할지|(?:지말자|그만하자)$')
+_MOCK_INTERACTIONS = (
+    (r'두드리|두드려|부딪|내리치|내리쳐|던지|던져',
+     '행동을 시도하자 가까운 곳에 소리가 짧게 울린다. 두 사람은 잠시 멈춰 주변의 반응을 살핀다.',
+     '방금 소리 들었지? 주변은 아직 그대로야.'),
+    (r'살펴|찾아|둘러|들여다|비춰|비추',
+     '가까이 보이는 곳부터 살핀다. 지금 자리에서 확인할 수 있는 범위까지만 보인다.',
+     '여기서 보이는 건 같이 살펴볼게.'),
+    (r'부르|불러|신호|소리치|소리쳐|전화|연락',
+     '지금 자리에서 신호를 보내 보지만, 상대에게 닿았는지는 아직 확인되지 않는다.',
+     '잠깐, 반응이 오는지 들어볼게.'),
+    (r'밀|옮기|옮겨|들어올|당겨|당기',
+     '손을 뻗어 말한 동작을 시도한다. 바로 뜻대로 되지 않아 두 사람은 손을 멈춘다.',
+     '잠깐, 생각처럼 움직이지 않아.'),
+)
 
 
 def _api_key():
@@ -46,19 +64,42 @@ def _mock_judge_action(scenario: dict, stage: dict, character: dict,
       → reply 가 비어 있으면 서버가 stage["reactions"] 문장을 대신 쓴다.
     """
     # API 키가 없을 때 쓰는 키워드 기반 가짜 판정.
-    text = "".join(user_text.split())
-    if any("".join(k.split()) in text for k in stage["keywords"]):
+    text = rules.action_text(user_text)
+    preview = stage.get('server_preview')
+    if preview == 'wrong' or (preview and stage.get('rubric')):
+        verdict = preview
+    elif any(rules.compact(k) in text for k in stage["keywords"]):
         verdict = "correct"
     elif any("".join(k.split()) in text for k in stage.get("wrong_keywords", [])):
         verdict = "wrong"
     else:
         verdict = "unclear"
-    # 가짜 AI의 말 종류 분류: 물음표로 끝나면 질문, 아니면 행동 시도로 본다.
-    intent = "question" if verdict == "unclear" and user_text.strip().endswith(("?", "？")) else "action"
+    intent = 'action' if verdict != 'unclear' or stage.get('observed_this_turn') else 'chat'
+    if intent == 'chat' and (user_text.strip().endswith(('?', '？')) or rules.QUESTION_END.search(rules.compact(user_text))):
+        intent = 'question'
     reply = stage["reactions"][verdict]
     if intent == "question":
         reply = stage.get("question_reply", "지금 그런 거 따질 때야? 빨리 어떻게 할지 정해!")
-    return {"verdict": verdict, "intent": intent, "reply": reply, "reason": "mock: keyword match"}
+    elif intent == 'chat' and any(phrase in text for phrase in ('움직이지마', '잠깐멈춰', '잠깐기다려')):
+        reply = '네, 잠시 멈추겠습니다.' if '존댓말' in character.get('speech_style', '') else '알았어, 잠깐 멈출게.'
+    interaction = ''
+    visual = 'scene'
+    if intent == 'chat' and _ACTION_END.search(text) and not _HESITATION.search(text):
+        intent = 'action'
+        interaction = '말한 행동을 이 자리에서 시도한다. 주변을 살피는 사이에도 현재 상황은 이어진다.'
+        reply = '응, 옆에서 지켜보고 있어.'
+        for pattern, outcome, reaction in _MOCK_INTERACTIONS:
+            if re.search(pattern, text):
+                interaction, reply = outcome, reaction
+                break
+        if re.search(r'두드리|두드려', text):
+            visual = 'knock'
+        elif re.search(r'(휴대폰|휴대전화|손전등|플래시).{0,8}(비춰|비추)', text):
+            visual = 'light'
+        elif re.search(r'(손으?로|표면|벽).{0,8}(만지|만져|밀)', text):
+            visual = 'touch'
+    return {"verdict": verdict, "intent": intent, "interaction": interaction, "interaction_visual": visual, "reply": reply,
+            "reason": "mock: keyword match"}
 
 
 def evaluate(scenario: dict, results: dict[int, str], transcript: list[dict]) -> dict:

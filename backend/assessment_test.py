@@ -37,16 +37,20 @@ class AssessmentTests(unittest.TestCase):
         fire = harness.SCENARIOS['fire_office']['stages'][1]
         self.assertEqual(set(rules.observe(fire, '엘리베이터는 위험해. 계단으로 가자')), {'stairs', 'stop_lift'})
 
-    def test_true_missing_action_explains_reason_and_each_attempt(self):
-        for text in ['계단으로 가자', '그냥 선생님 지시만 따라다녀', '그냥 선생님 지시만 따라다녀']:
+    def test_missing_action_explanation_preserves_partial_evidence(self):
+        for text in ['계단으로 가자', '계단으로 가자', '아직 움직이지 마.']:
             harness.handle_message(self.s, text)
+        self.assertEqual(self.s.stage_index, 2)
+        self.assertEqual(self.s.turns_in_stage, 0)
+        # 이전에 저장된 미충족 단계도 같은 기준으로 설명한다.
+        self.s.stage_results[3] = 'failed'
         self.s.status = 'cleared'
         report = harness.build_report(self.s)
         check = report['checks'][2]
         self.assertEqual(check['result'], 'failed')
         self.assertEqual(check['missing_actions'], ['엘리베이터 탑승 제지'])
         self.assertIn('2개 중 1개', check['reason'])
-        self.assertEqual(len(check['action_reviews']), 3)
+        self.assertEqual(len(check['action_reviews']), 2)
         self.assertIn('위험 행동 판정은 아닙니다', check['action_reviews'][1]['note'])
         self.assertEqual(report['assessment_note'], '')
 

@@ -106,8 +106,8 @@ class DbTests(unittest.TestCase):
 
     def test_admin_stats_come_from_db_after_restart(self):
         sid = self.start()
-        for _ in range(15):
-            self.say(sid, "음...")                      # 끝까지 (전부 도움받음)
+        for _ in range(3):
+            self.say(sid, "그냥 기다리자")             # 누적 위험으로 첫 단계에서 종료
         restart_server()
         row = next(r for r in self.c.get("/admin/scenarios", headers={"X-Admin-Token": "t"}).json() if r["id"] == "fire_office")
         self.assertGreaterEqual(row["stats"]["finished"], 1)

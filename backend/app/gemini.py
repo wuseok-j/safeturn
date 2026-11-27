@@ -66,9 +66,11 @@ def judge(scenario, stage, character, user_text, history):
                 counts = {name: usage.get(name, 0) for name in ('promptTokenCount', 'candidatesTokenCount', 'thoughtsTokenCount', 'totalTokenCount')}
                 log.info('[gemini] model=%s %.2fs in=%s out=%s total=%s', model,
                          time.monotonic() - started, counts['promptTokenCount'], counts['candidatesTokenCount'], counts['totalTokenCount'])
-                # intent 가 없거나 이상하면 'action'(판단 시도)으로 본다 → 기회를 아끼는 쪽으로 잘못 갈 수 없음
-                intent = data.get('intent') if data.get('intent') in ('action', 'question', 'chat') else 'action'
+                intent = data.get('intent') if data.get('intent') in ('action', 'question', 'chat') else 'chat'
+                interaction = data.get('interaction')
                 return {'verdict': data['verdict'], 'intent': intent, 'reply': data['reply'].strip()[:300],
+                        'interaction': interaction.strip()[:300] if isinstance(interaction, str) else '',
+                        'interaction_visual': data.get('interaction_visual'),
                         'reason': data['reason'][:300], 'usage': counts, 'model': model,
                         'latency_ms': round((time.monotonic() - started) * 1000)}
             except (ValueError, TypeError, AttributeError, IndexError):

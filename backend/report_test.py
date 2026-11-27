@@ -21,6 +21,9 @@ client.post(f'/sessions/{sid}/messages', json={'text': blocked})
 for _ in range(3):
     response = client.post(f'/sessions/{sid}/messages', json={'text': '음...'})
     assert response.status_code == 200
+assert response.json()['stage'] == 1
+action = '불이야! 119 신고할게요'
+response = client.post(f'/sessions/{sid}/messages', json={'text': action})
 assert response.json()['stage'] == 2
 for text in ['같이 타자', '같이 타자']:
     response = client.post(f'/sessions/{sid}/messages', json={'text': text})
@@ -29,7 +32,7 @@ response = client.get(f'/sessions/{sid}/report')
 assert response.status_code == 200
 report = response.json()
 first, second, third = report['checks'][:3]
-assert first['attempts'] == 3 and first['user_actions'] == ['음...'] * 3
+assert first['attempts'] == 1 and first['user_actions'] == [action]
 assert blocked not in str(report['checks'])
 assert second['attempts'] == 2 and second['result'] == 'failed'
 assert third['attempts'] == 0 and third['user_actions'] == []
@@ -37,4 +40,4 @@ assert third['result'] == 'not_reached'
 assert client.get(f'/sessions/{sid}/report').json() == report
 assert client.get(f'/sessions/{other}/report').status_code == 400
 assert client.post(f'/sessions/{sid}/messages', json={'text': '계단'}).status_code == 400
-print('PASS: report evidence, blocked input, timeout, session isolation, cached report')
+print('PASS: report evidence, blocked input, risk limit, session isolation, cached report')

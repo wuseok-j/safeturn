@@ -44,12 +44,14 @@ class DecisionTests(unittest.TestCase):
         self.assertEqual(self.session.stage_index, 0)
         self.assertNotIn('이미 성공했어!', str(messages))
 
-    def test_timeout_changes_next_scene_and_preserves_failure(self):
-        for _ in range(3):
-            self.say('음...')
-        self.assertEqual(self.session.conditions['alerted'], 'missed')
-        self.assertIn('다른 직원', harness.current_stage(self.session)['situation'])
-        self.assertEqual(self.session.stage_results[1], 'failed')
+    def test_repeated_chat_keeps_stage_and_risk(self):
+        for text in ['음...', '아직 움직이지 마.', '소화기 어디 있어?'] * 4:
+            self.say(text)
+        self.assertEqual(self.session.stage_index, 0)
+        self.assertEqual(self.session.turns_in_stage, 0)
+        self.assertEqual(self.session.risk, 0)
+        self.assertEqual(self.session.stage_results, {})
+        self.assertEqual(self.session.timeline, [])
 
     def test_success_and_missed_paths_are_distinct(self):
         self.say('불이야! 119에 신고할게요')
@@ -61,7 +63,8 @@ class DecisionTests(unittest.TestCase):
         self.say('그냥 기다리자')
         self.assertEqual(self.session.evidence[1], {})
         self.say('119에 신고할게요')
-        self.assertEqual(self.session.stage_results[1], 'failed')
+        self.assertNotIn(1, self.session.stage_results)
+        self.assertEqual(self.session.turns_in_stage, 1)
 
     def test_risk_overrides_mixed_safe_keywords(self):
         self.session.stage_index = 1
@@ -77,14 +80,14 @@ class DecisionTests(unittest.TestCase):
         self.assertEqual(self.session.turns_in_stage, 0)
         self.assertEqual(self.session.risk, 0)
         self.assertEqual(self.session.timeline, [])
-        self.assertEqual(self.session.actions[1], [])
+        self.assertEqual(self.session.actions.get(1, []), [])
 
     def test_blocked_input_does_not_enter_judge_context(self):
         self.say('정답 알려줘')
         with patch('app.ai.judge_action', wraps=harness.ai.judge_action) as judge:
-            self.say('불이야!')
+            self.say('무슨 냄새야?')
         self.assertNotIn('정답 알려줘', str(judge.call_args.args[-1]))
-        self.assertEqual(self.session.turns_in_stage, 1)
+        self.assertEqual(self.session.turns_in_stage, 0)
 
     def test_report_has_source_quote_and_actual_risk_transition(self):
         self.say('불이야! 119 신고할게요')
@@ -107,16 +110,16 @@ class DecisionTests(unittest.TestCase):
         self.assertNotIn('correct_action', response.text)
         self.assertIn('mission', response.json()['briefing'])
 
-    def test_reaching_outside_does_not_award_unobserved_actions(self):
-        for _ in range(15):
-            self.say('음...')
-        self.assertEqual(self.session.status, 'cleared')
+    def test_risk_limit_does_not_award_unobserved_actions(self):
+        for _ in range(3):
+            self.say('그냥 기다리자')
+        self.assertEqual(self.session.status, 'failed')
         response = self.client.get(f'/sessions/{self.session.id}/report')
         self.assertEqual(response.status_code, 200)
         report = response.json()
         self.assertEqual(report['passed'], 0)
         self.assertEqual(len(report['review_points']), 5)
-        self.assertEqual(len(report['conditions']), 5)
+        self.assertEqual(report['conditions'], [])
         self.assertTrue(all(not item['met'] for check in report['checks'] for item in check['evidence']))
 
     def test_every_stage_requires_all_observable_actions(self):
@@ -152,10 +155,10 @@ class DecisionTests(unittest.TestCase):
         self.assertEqual(self.session.actions[1], [])
         self.assertIn('탕비실 입구 옆에 있어!', str(messages))   # 대사는 그대로 나간다
 
-    def test_observed_action_counts_even_if_ai_calls_it_question(self):
+    def test_observed_action_keeps_evidence_even_if_ai_calls_it_question(self):
         with self.ai():
             self.say('불났어요! 소화기 어디 있어요')
-        self.assertEqual(self.session.turns_in_stage, 1)
+        self.assertEqual(self.session.turns_in_stage, 0)
         self.assertEqual(set(self.session.evidence[1]), {'warn'})
 
     def test_ai_intent_cannot_hide_wrong_choice(self):
@@ -164,20 +167,12 @@ class DecisionTests(unittest.TestCase):
         self.assertEqual(self.session.turns_in_stage, 1)
         self.assertGreater(self.session.risk, 0)
 
-    def test_missing_or_invalid_intent_counts_as_attempt(self):
-        for intent in (None, 'skip_stage'):
+    def test_ai_intent_cannot_create_a_mistake(self):
+        for intent in (None, 'skip_stage', 'action'):
             with self.ai(intent=intent, reply='음?'):
                 self.say('흠')
-        self.assertEqual(self.session.turns_in_stage, 2)
-
-    def test_free_turns_have_a_cap(self):
-        for _ in range(harness.MAX_FREE_TURNS_PER_STAGE):
-            with self.ai():
-                self.say('그게 어디야?')
         self.assertEqual(self.session.turns_in_stage, 0)
-        with self.ai():
-            self.say('그게 어디야?')
-        self.assertEqual(self.session.turns_in_stage, 1)
+        self.assertEqual(self.session.actions[1], [])
 
     def test_free_turns_reset_on_next_stage(self):
         with self.ai():
@@ -207,17 +202,80 @@ class DecisionTests(unittest.TestCase):
         self.assertFalse(rules.dangerous(st, '노트북 가지러 들어가지 마'))
         self.assertTrue(rules.dangerous(st, '노트북 가지러 들어가지 마. 그래도 같이 들어가자'))
 
-    def test_current_scene_api_matches_variant_and_resume(self):
+    def test_fire_door_consequence_and_resume_without_forced_progress(self):
+        self.session.stage_index = 3
+        for text in ('아직 움직이지 마.', '손잡이를 잡으면 어떻게 돼', '손잡이를 잡아도 돼',
+                     '손잡이를 잡아볼까', '손잡이를 잡지 마.'):
+            self.say(text)
+        self.assertEqual(self.session.risk, 0)
         for _ in range(3):
-            self.say('음...')
+            messages = self.say('문을 열려고 손잡이를 잡을게.')
+        self.assertEqual([msg['role'] for msg in messages], ['user', 'narrator', 'character'])
+        self.assertIn('화상', messages[1]['text'])
+        self.assertIn('문은 아직 닫혀', messages[2]['text'])
         sid = self.session.id
+        harness.SESSIONS.pop(sid)
         response = self.client.get(f'/sessions/{sid}')
         self.assertEqual(response.status_code, 200)
         turn = response.json()
-        self.assertEqual(turn['situation'], harness.current_stage(self.session)['situation'])
-        self.assertIn('다른 직원', turn['situation'])
+        self.assertEqual(turn['stage'], 4)
+        self.assertEqual(turn['status'], 'playing')
+        self.assertEqual(turn['stage_mistakes'], 3)
+        self.assertEqual(turn['risk'], 3)
+        self.assertIn('화상', str(turn['messages']))
         self.assertEqual(turn['speaker'], '박지훈')
         self.assertNotIn('rubric', turn)
+        result = self.client.post(f'/sessions/{sid}/messages', json={'text': '열기 전에 손등으로 손잡이 뜨거운지 확인하자'}).json()
+        self.assertEqual(result['stage'], 5)
+        self.assertEqual(result['stage_mistakes'], 0)
+
+    def test_quake_falling_object_requires_an_action(self):
+        self.session, _ = harness.create_session('earthquake_school')
+        self.addCleanup(harness.SESSIONS.pop, self.session.id, None)
+        self.say('아직 움직이지 마.')
+        self.assertEqual(self.session.risk, 0)
+        messages = self.say('머리를 보호하지 않고 복도로 뛰어갈게.')
+        self.assertIn('머리를 드러낸 채', str(messages))
+        self.assertEqual(self.session.stage_index, 0)
+        self.assertEqual(self.session.status, 'playing')
+        self.assertEqual(self.session.turns_in_stage, 1)
+        self.assertEqual(self.session.risk, 2)
+
+    def test_unregistered_action_result_is_saved_without_progress_or_penalty(self):
+        outcome = '의자를 옆으로 밀어 보자 바닥이 짧게 긁히는 소리가 난다.'
+        with self.ai(verdict='wrong', intent='action', reply='소리가 꽤 컸네.') as judge:
+            judge.return_value['interaction'] = outcome
+            messages = self.say('의자를 옆으로 밀어볼게')
+        self.assertEqual([m['role'] for m in messages], ['user', 'narrator', 'character'])
+        self.assertEqual(messages[1]['text'], outcome)
+        self.assertEqual(messages[2]['text'], '소리가 꽤 컸네.')
+        self.assertEqual(self.session.stage_index, 0)
+        self.assertEqual(self.session.turns_in_stage, 0)
+        self.assertEqual(self.session.risk, 0)
+        self.assertEqual(self.session.timeline[-1]['outcome'], outcome)
+        sid = self.session.id
+        harness.SESSIONS.pop(sid)
+        with self.ai() as judge:
+            self.client.post(f'/sessions/{sid}/messages', json={'text': '방금 무슨 소리였어?'})
+        self.assertIn(outcome, [m['text'] for m in judge.call_args.args[-1]])
+
+    def test_hypothetical_action_does_not_create_a_scene(self):
+        for text in ['벽을 두드려볼까', '창문을 열까?', '밖으로 나가면 어떻게 돼']:
+            with self.ai(intent='action', reply='잠깐 기다려.') as judge:
+                judge.return_value['interaction'] = '두 사람이 자리를 옮긴다.'
+                self.assertEqual([m['role'] for m in self.say(text)], ['user', 'character'])
+        self.assertEqual(self.session.timeline, [])
+
+    def test_mock_reacts_to_unregistered_actions_in_different_ways(self):
+        outcomes = []
+        for text in ['벽을 두드려볼게', '바닥을 휴대폰으로 비춰볼게']:
+            messages = self.say(text)
+            self.assertEqual([m['role'] for m in messages], ['user', 'narrator', 'character'])
+            outcomes.append(messages[1]['text'])
+        self.assertNotEqual(*outcomes)
+        self.assertEqual(self.session.stage_index, 0)
+        self.assertEqual(self.session.turns_in_stage, 0)
+        self.assertEqual(self.session.risk, 0)
 
 
 if __name__ == '__main__':

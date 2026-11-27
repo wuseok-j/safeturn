@@ -24,22 +24,30 @@ class ContentTests(unittest.TestCase):
         for sid in ANSWERS:
             sc = harness.SCENARIOS[sid]
             self.assertEqual(scenario_check.check(sc)['errors'], [], sid)
-            paths = [sc['thumbnail'], sc['cleared_image']]
+            paths = [sc['thumbnail'], sc['cleared_image'], *harness.INTERACTION_IMAGES.values()]
             for st in sc['stages']:
                 paths.extend([st['image'], st['action_image']])
                 paths.extend(option['image'] for option in st.get('action_alternatives', []))
+                paths.extend(item['partial_scene']['image'] for item in st.get('rubric', []) if item.get('partial_scene'))
+                wrong = st['if_wrong']
+                paths.extend(outcome['image'] for outcome in [wrong, *wrong.get('events', [])] if outcome.get('image'))
             for path in paths:
                 self.assertTrue((ROOT / 'frontend/public/scenes' / path).is_file(), path)
 
-    def test_action_scene_is_only_sent_for_a_confirmed_transition(self):
+    def test_action_scene_and_outcome_on_the_same_stage(self):
         client = TestClient(app)
         started = client.post('/sessions', json={'scenario_id': 'fire_office'}).json()
         url = f"/sessions/{started['session_id']}/messages"
         self.assertIsNone(started['action_scene'])
-        for text in ('그냥 기다리자', '불이야!'):
-            turn = client.post(url, json={'text': text}).json()
-            self.assertEqual(turn['stage'], 1)
-            self.assertIsNone(turn['action_scene'])
+        turn = client.post(url, json={'text': '그냥 기다리자'}).json()
+        self.assertEqual(turn['stage'], 1)
+        self.assertEqual(turn['action_scene']['kind'], 'outcome')
+        self.assertEqual(turn['action_scene']['image'], 'fire_office/stage1-ai.jpg')
+        self.assertEqual(turn['action_scene']['message_count'], 2)
+        turn = client.post(url, json={'text': '불이야!'}).json()
+        self.assertEqual(turn['stage'], 1)
+        self.assertEqual(turn['action_scene']['kind'], 'partial')
+        self.assertEqual(turn['image'], 'fire_office/partial-warn.jpg')
         turn = client.post(url, json={'text': '비상벨을 누를게'}).json()
         self.assertEqual(turn['stage'], 2)
         self.assertEqual(turn['action_scene']['image'], 'fire_office/action1-ai.jpg')
@@ -51,8 +59,58 @@ class ContentTests(unittest.TestCase):
         started = client.post('/sessions', json={'scenario_id': 'fire_office'}).json()
         for _ in range(3):
             turn = client.post(f"/sessions/{started['session_id']}/messages", json={'text': '음...'}).json()
-        self.assertEqual(turn['stage'], 2)
+        self.assertEqual(turn['stage'], 1)
+        self.assertEqual(turn['stage_mistakes'], 0)
         self.assertIsNone(turn['action_scene'])
+
+    def test_free_action_images_match_the_intent(self):
+        client = TestClient(app)
+        turn = client.post('/sessions', json={'scenario_id': 'earthquake_school'}).json()
+        url = f"/sessions/{turn['session_id']}/messages"
+        for text, image in [('벽을 두드려볼게', 'action-knock.jpg'),
+                            ('휴대폰으로 바닥을 비춰볼게', 'action-light.jpg'),
+                            ('손으로 벽을 만져볼게', 'action-hands.jpg')]:
+            with self.subTest(text=text):
+                turn = client.post(url, json={'text': text}).json()
+                self.assertEqual(turn['stage'], 1)
+                self.assertEqual(turn['stage_mistakes'], 0)
+                scene = turn['action_scene']
+                self.assertEqual(scene['kind'], 'outcome')
+                self.assertEqual(scene['image'], f'interactions/{image}')
+                self.assertEqual(scene['description'], turn['messages'][1]['text'])
+        turn = client.post(url, json={'text': '벽을 두드려볼까?'}).json()
+        self.assertIsNone(turn['action_scene'])
+
+    def test_partial_action_has_a_persistent_scene_and_an_indirect_hint(self):
+        client = TestClient(app)
+        for sid, text, image, hint, rest in [
+            ('earthquake_school', '책상 아래에 숨자', 'partial-shelter.jpg', '책상이 자꾸 밀려', '책상 다리를 잡을게'),
+            ('fire_office', '불이야!', 'partial-warn.jpg', '여기 없는 사람들', '119에 신고할게요'),
+            ('elevator_apartment', '문 억지로 열지 마', 'partial-stop-door.jpg', '밖에 있는 사람들', '인터폰을 눌러서 갇혔다고 알리자'),
+        ]:
+            with self.subTest(scenario=sid):
+                start = client.post('/sessions', json={'scenario_id': sid}).json()
+                url = f"/sessions/{start['session_id']}"
+                with patch('app.ai.judge_action', side_effect=AssertionError('partial is server-verified')):
+                    turn = client.post(f'{url}/messages', json={'text': text}).json()
+                self.assertEqual(turn['stage'], 1)
+                self.assertEqual(turn['risk'], 0)
+                self.assertEqual(turn['stage_mistakes'], 0)
+                self.assertEqual(len(turn['confirmed_actions']), 1)
+                self.assertEqual(turn['action_scene']['kind'], 'partial')
+                self.assertEqual(turn['action_scene']['image'], f'{sid}/{image}')
+                self.assertIn(hint, turn['messages'][-1]['text'])
+                harness.SESSIONS.pop(start['session_id'])
+                resumed = client.get(url).json()
+                self.assertEqual(resumed['image'], f'{sid}/{image}')
+                self.assertEqual(resumed['confirmed_actions'], turn['confirmed_actions'])
+                self.assertIsNone(resumed['action_scene'])
+                saved = harness.SESSIONS[start['session_id']]
+                stage = harness.current_stage(saved)
+                self.assertEqual(harness._ai_context(saved, stage)['situation'], resumed['situation'])
+                final = client.post(f'{url}/messages', json={'text': rest}).json()
+                self.assertEqual(final['stage'], 2)
+                self.assertEqual(final['confirmed_actions'], [])
 
     def test_elevator_stage_action_and_completion_images(self):
         client = TestClient(app)

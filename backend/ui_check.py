@@ -103,6 +103,28 @@ else:
                         if sid == 'earthquake_school' and index == 2:
                             text = '엘리베이터는위험해 계단으로가자'
                         box = page.get_by_role('textbox', name='내가 할 행동')
+                        if sid == 'earthquake_school' and index == 0:
+                            box.fill('책상 아래에 숨자')
+                            page.get_by_role('button', name='보내기', exact=True).click()
+                            partial = page.locator('[data-scene-kind="partial"] img')
+                            expect(partial).to_have_attribute('src', '/scenes/earthquake_school/partial-shelter.jpg')
+                            expect(partial).to_be_visible()
+                            expect(page.locator('.typing')).to_have_count(0)
+                            expect(page.get_by_text('책상이 자꾸 밀려', exact=False)).to_be_visible()
+                            expect(page.locator('.stage-dots small')).to_have_text('1/5')
+                            text = '책상 다리를 잡을게'
+                        if sid == 'fire_office' and index == 3:
+                            for trial, mistakes in [('아직 움직이지 마.', 0), ('문을 열려고 손잡이를 잡을게.', 1)]:
+                                box.fill(trial)
+                                page.get_by_role('button', name='보내기', exact=True).click()
+                                if mistakes:
+                                    cut = page.locator('[data-scene-kind="outcome"] img')
+                                    expect(cut).to_have_attribute('src', '/scenes/fire_office/outcome-hot-handle.jpg')
+                                    expect(cut).to_be_visible()
+                                expect(page.get_by_text(f'이 장면의 위험 행동 {mistakes}회', exact=True)).to_be_visible()
+                                expect(page.locator('.typing')).to_have_count(0)
+                                expect(page.locator('.stage-dots small')).to_have_text('4/5')
+                            expect(page.locator('.narration').filter(has_text='손에 화상을 입었다')).to_be_visible()
                         box.fill(text)
                         if index == 0:
                             page.evaluate('''() => {
@@ -172,19 +194,32 @@ else:
                 page.goto('http://127.0.0.1:18765')
                 page.locator('.scenario-card').filter(has_text='학교 지진 대응').get_by_role('button', name='임무 확인하기').click()
                 page.get_by_role('button', name='준비 완료').click()
-                for text in [*ANSWERS['earthquake_school'][:2], '계단으로 가자',
-                             '그냥 선생님 지시만 따라다녀', '그냥 선생님 지시만 따라다녀',
-                             *ANSWERS['earthquake_school'][3:]]:
+                for text in ['아직 움직이지 마.', '벽을 두드려볼게', '기다리지 말고 먼저 나가자',
+                             '머리를 보호하지 않고 복도로 뛰어갈게.', '머리를 보호하지 않고 복도로 뛰어갈게.']:
                     page.get_by_role('textbox', name='내가 할 행동').fill(text)
                     page.get_by_role('button', name='보내기', exact=True).click()
+                    if text in {'벽을 두드려볼게', '기다리지 말고 먼저 나가자'}:
+                        cut = page.locator('[data-scene-kind="outcome"] img')
+                        image = 'interactions/action-knock.jpg' if text.startswith('벽') else 'earthquake_school/outcome-falling-object.jpg'
+                        expect(cut).to_have_attribute('src', f'/scenes/{image}')
+                        expect(cut).to_be_visible()
+                        if text == '기다리지 말고 먼저 나가자':
+                            cut.evaluate('(el) => Promise.all(el.parentElement.getAnimations().map(animation => animation.finished))')
+                            page.screenshot(path=str(output / f'{name}-earthquake_school-outcome.png'))
                     page.wait_for_function('!document.querySelector(".typing")')
+                    if text == '벽을 두드려볼게':
+                        expect(page.locator('.narration').filter(has_text='소리가 짧게 울린다')).to_be_visible()
+                        expect(page.get_by_text('이 장면의 위험 행동 0회', exact=True)).to_be_visible()
+                    if text == '기다리지 말고 먼저 나가자':
+                        expect(page.locator('.narration').filter(has_text='물건이 바로 앞 바닥으로 떨어졌다')).to_be_visible()
+                        expect(page.locator('.stage-dots small')).to_have_text('1/5')
                 page.get_by_role('button', name='리포트 보기', exact=True).click()
                 page.locator('.report-head').wait_for()
-                assert page.locator('.score strong').inner_text() == '4'
+                assert page.locator('.score strong').inner_text() == '0'
                 failed = page.locator('.check.failed')
-                assert '엘리베이터 탑승 제지' in failed.locator('.check-reason').inner_text()
-                assert failed.locator('.action-review').count() == 3
-                assert '위험 행동 판정은 아닙니다' in failed.inner_text()
+                assert '위험도가 한도에 도달' in failed.locator('.check-reason').inner_text()
+                assert failed.locator('.action-review').count() == 4
+                assert '머리를 드러낸 채 움직이자' in page.locator('.decision-timeline').inner_text()
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
                 page.screenshot(path=str(output / f'{name}-assessment-failed-report.png'), full_page=True)
                 print(f'PASS: {name} failed report identifies missing action and explains all three attempts')
