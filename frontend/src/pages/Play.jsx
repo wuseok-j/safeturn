@@ -3,6 +3,26 @@ import { activePlay, api } from "../api.js";
 import { categoryEmoji, riskLevel } from "../ui.js";
 
 const MAX_LEN = 300;
+const ACTION_HOLD_MS = 3000;
+
+function sceneAsset(path) {
+  return `/scenes/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+async function prepareImage(path) {
+  if (!path) return false;
+  const image = new Image();
+  image.src = sceneAsset(path);
+  let timer;
+  try {
+    return await Promise.race([
+      image.decode().then(() => true, () => false),
+      new Promise(resolve => { timer = window.setTimeout(() => resolve(false), 900); }),
+    ]);
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
 
 // adminToken 이 있으면 운영자 미리 플레이 (작성 중 시나리오도 시작 가능)
 // resumeId 가 있으면 새로 시작하지 않고 서버 DB에 저장된 플레이를 이어서 한다
@@ -12,11 +32,13 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
   const [pending, setPending] = useState("");    // 서버 응답을 기다리는 내 말
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
-  const [brokenImage, setBrokenImage] = useState("");
+  const [actionScene, setActionScene] = useState(null);
   const started = useRef(false);
   const chatBox = useRef(null);
+  const scenePanel = useRef(null);
   const inFlight = useRef(false);
   const lastAttempt = useRef(null);
+  const inputBox = useRef(null);
 
   useEffect(() => {
     onBusyChange?.(!!pending);
@@ -35,6 +57,11 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
     const box = chatBox.current;
     if (box) box.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
   }, [messages, pending, error]);
+
+  // AI 답이 오면(입력창이 다시 켜지면) 커서를 입력창에 자동으로 둔다. 클릭 없이 바로 이어서 칠 수 있게.
+  useEffect(() => {
+    if (turn?.status === "playing" && !pending) inputBox.current?.focus({ preventScroll: true });
+  }, [turn, pending]);
 
   async function start(fresh = false) {
     setError("");
@@ -72,8 +99,23 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
     setError("");
     try {
       const t = await api.sendMessage(turn.session_id, text, attempt.id, attempt.stage);
+      let remainingMessages = t.messages;
+      if (t.image !== turn.image) void prepareImage(t.image);
+      if (t.action_scene && await prepareImage(t.action_scene.image)) {
+        const panel = scenePanel.current;
+        const wasOpen = panel?.open;
+        if (panel) panel.open = true;
+        const shown = t.action_scene.message_count ?? 0;
+        setMessages(prev => [...prev, ...t.messages.slice(0, shown)]);
+        remainingMessages = t.messages.slice(shown);
+        setActionScene(t.action_scene);
+        await new Promise(resolve => window.setTimeout(resolve, ACTION_HOLD_MS));
+        if (panel && !wasOpen && t.status !== "cleared") panel.open = false;
+        setActionScene(null);
+      }
+      if (t.status === "cleared" && scenePanel.current) scenePanel.current.open = true;
       setTurn(t);
-      setMessages((prev) => [...prev, ...t.messages]); // 서버가 내 말도 같이 돌려준다
+      setMessages(prev => [...prev, ...remainingMessages]);
       remember(t);
       lastAttempt.current = null;
     } catch (err) {
@@ -93,6 +135,8 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
   }
 
   const ended = turn && turn.status !== "playing";
+  const cleared = turn?.status === "cleared";
+  const sceneTitle = cleared ? "대피 완료" : turn?.stage_title;
 
   return (
     <main className="play">
@@ -116,18 +160,16 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
       {!!turn?.conditions?.length && <div className="condition-trail" aria-label="이전 선택의 영향">{turn.conditions.map((label, i) => <span key={i}>{label}</span>)}</div>}
       <div className={`play-workspace ${!turn ? "is-loading" : ""}`}>
       {turn && (
-        <details className="scene-panel" open>
-          <summary>현재 장면 · {turn.stage_title}<span>펼치기 / 접기</span></summary>
+        <details className={`scene-panel${actionScene || cleared ? " is-showing-cutaway" : ""}`} ref={scenePanel} open>
+          <summary>현재 장면 · {sceneTitle}<span>펼치기 / 접기</span></summary>
           <div className="scene-content">
             <div className={`scene risk-${riskLevel(turn.risk, turn.max_risk)}`}>
-              {turn.image && brokenImage !== turn.image
-                ? <img src={`/scenes/${turn.image.split("/").map(encodeURIComponent).join("/")}`} alt={`${turn.stage_title} 장면`} onError={() => setBrokenImage(turn.image)} />
-                : <div className="scene-placeholder"><span aria-hidden="true">{categoryEmoji(scenario.category)}</span><small>상황을 읽고 직접 판단해 보세요</small></div>}
+              <SceneVisual category={scenario.category} turn={turn} action={actionScene} />
             </div>
             <div className="scene-stage">STAGE {turn.stage} / {turn.total_stages}</div>
-            <h2 className="scene-heading">{turn.stage_title}</h2>
-            <p className="scene-description">{turn.situation}</p>
-            <p className="scene-guide">선택한 행동은 다음 상황에 남습니다. 결과에서 내 발언과 판단 근거를 확인할 수 있습니다.</p>
+            <h2 className="scene-heading">{sceneTitle}</h2>
+            <p className="scene-description">{cleared ? "함께 안전한 장소에 도착했습니다." : actionScene?.description ?? turn.situation}</p>
+            {!cleared && <p className="scene-guide">선택한 행동은 다음 상황에 남습니다. 결과에서 내 발언과 판단 근거를 확인할 수 있습니다.</p>}
           </div>
         </details>
       )}
@@ -136,8 +178,8 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
       {/* 채팅 */}
       <div className="chat" ref={chatBox} role="log" aria-label="상황과 대화" aria-live="polite">
         {messages.map((m, i) => <Bubble key={i} m={m} />)}
-        {pending && <Bubble m={{ role: "user", name: "나", text: pending }} dim />}
-        {pending && <div className="typing">상대가 반응하는 중…</div>}
+        {pending && (!actionScene || !actionScene.message_count) && <Bubble m={{ role: "user", name: "나", text: pending }} dim />}
+        {pending && <div className="typing">{actionScene ? "행동이 상황에 반영되고 있어요…" : "상대가 반응하는 중…"}</div>}
         {error && (
           <div className="error-box">
             {error} {!turn && (resumeId
@@ -158,6 +200,7 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
       ) : (
         <form className="composer" onSubmit={send}>
           <input
+            ref={inputBox}
             value={input}
             aria-label="내가 할 행동"
             aria-describedby="composer-help"
@@ -175,6 +218,46 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
       </section>
       </div>
     </main>
+  );
+}
+
+function SceneVisual({ category, turn, action }) {
+  const frame = action ? {
+    image: action.image, alt: action.description, caption: "행동 확인", kind: "action",
+  } : {
+    image: turn.image, alt: turn.status === "cleared" && turn.image_includes_speaker ? "안전하게 대피한 뒤 안도하며 웃는 인물들" : `${turn.stage_title} 장면`,
+    portrait: turn.speaker_image, integrated: turn.image_includes_speaker,
+    caption: turn.status === "cleared" ? "안전하게 대피했어요" : turn.speaker,
+    kind: turn.status === "cleared" ? "cleared" : "stage",
+  };
+  frame.key = JSON.stringify(frame);
+  const [layers, setLayers] = useState({ current: frame, previous: null });
+  if (layers.current.key !== frame.key) setLayers({ current: frame, previous: layers.current });
+
+  return (
+    <>
+      {layers.previous && <SceneFrame key={layers.previous.key} frame={layers.previous} category={category} previous />}
+      <SceneFrame key={layers.current.key} frame={layers.current} category={category} />
+    </>
+  );
+}
+
+function SceneFrame({ frame, category, previous = false }) {
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [portraitFailed, setPortraitFailed] = useState(false);
+  const hasImage = frame.image && !failed;
+  const hasPortrait = frame.portrait && (!frame.integrated || !hasImage) && !portraitFailed;
+
+  return (
+    <div className={`scene-frame${loaded || !hasImage ? " is-visible" : ""}`}
+      data-scene-kind={previous ? undefined : frame.kind} aria-hidden={previous || undefined}>
+      {hasImage
+        ? <img className="scene-background" src={sceneAsset(frame.image)} alt={frame.alt} onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
+        : <div className="scene-placeholder"><span aria-hidden="true">{categoryEmoji(category)}</span></div>}
+      {hasPortrait && <img className="scene-portrait" src={sceneAsset(frame.portrait)} alt="" onError={() => setPortraitFailed(true)} />}
+      {frame.caption && <span className="scene-caption">{frame.caption}</span>}
+    </div>
   );
 }
 

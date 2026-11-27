@@ -5,7 +5,8 @@
   "title": "학교 지진 대응",
   "summary": "수업 중 교실이 흔들린다. 서둘러 나가려는 친구와 함께 상황을 판단하고 운동장 집결까지 이동하세요.",
   "category": "지진",
-  "thumbnail": "earthquake_school/stage1.svg",
+  "thumbnail": "earthquake_school/stage1-ai.jpg",
+  "cleared_image": "earthquake_school/cleared-ai.jpg",
   "estimated_minutes": 7,
   "max_risk": 6,
   "briefing": {
@@ -41,7 +42,7 @@
       "role": "옆자리 친구",
       "personality": "친구를 챙기지만 놀라면 서둘러 움직이려 한다. 구체적으로 설명하면 귀 기울인다.",
       "speech_style": "반말. 한 번에 1~2문장.",
-      "image": null
+      "image": "earthquake_school/sua.png"
     }
   ],
   "stages": [
@@ -124,7 +125,9 @@
         "missed": "선생님이 두 사람에게 몸을 보호하도록 안내했다. 잠시 뒤 큰 흔들림이 잦아든다."
       },
       "next_if_correct": 2,
-      "image": "earthquake_school/stage1.svg"
+      "image": "earthquake_school/stage1-ai.jpg",
+      "image_includes_speaker": true,
+      "action_image": "earthquake_school/action1-ai.jpg"
     },
     {
       "stage": 2,
@@ -215,13 +218,15 @@
         }
       ],
       "next_if_correct": 3,
-      "image": "earthquake_school/stage2.svg"
+      "image": "earthquake_school/stage2-ai.jpg",
+      "image_includes_speaker": true,
+      "action_image": "earthquake_school/action2-ai.jpg"
     },
     {
       "stage": 3,
       "title": "복도의 갈림길",
       "character_id": "sua",
-      "situation": "대피 줄이 계단 앞에서 잠시 멈췄다. 엘리베이터 표시등이 켜져 있어 수아가 버튼으로 손을 뻗는다.",
+      "situation": "대피 줄이 2층 복도 끝 계단참에서 잠시 멈췄다. 수아는 한 팔로 머리를 가린 채, 표시등이 켜진 엘리베이터 버튼으로 다른 손을 뻗는다.",
       "opening_line": "엘리베이터는 아직 켜져 있네. 저걸 타면 더 빠르지 않을까?",
       "correct_action": "엘리베이터를 이용하지 않고 교사 안내에 따라 계단으로 이동한다.",
       "keywords": [
@@ -284,6 +289,7 @@
       "partial_reply": "응. 그래서 우리 둘은 어디로 움직이면 돼?",
       "question_reply": "계단 앞에는 선생님과 우리 반 친구들이 있어. 엘리베이터 표시등도 켜져 있어.",
       "facts": [
+        "두 사람은 아직 건물 안인 2층에 있다.",
         "계단 통로에는 인솔 교사가 있다.",
         "엘리베이터 문은 닫혀 있다."
       ],
@@ -291,11 +297,14 @@
         "key": "route",
         "success_label": "계단 대피 확인",
         "missed_label": "교사가 경로 교정",
-        "success": "수아가 버튼에서 손을 떼고 줄을 따라 계단으로 내려간다.",
+        "success": "수아가 버튼에서 손을 떼고, 머리를 보호한 채 줄을 따라 계단으로 내려간다.",
         "missed": "선생님이 엘리베이터 쪽에서 두 사람을 데리고 와 계단으로 인솔한다."
       },
       "next_if_correct": 4,
-      "image": "earthquake_school/stage3.svg"
+      "image": "earthquake_school/stage3-ai.jpg",
+      "image_includes_speaker": true,
+      "action_image": "earthquake_school/action3-ai.jpg",
+      "action_description": "수아와 친구들이 가방으로 머리를 보호하며 선생님을 따라 2층 계단에서 아래층으로 내려간다."
     },
     {
       "stage": 4,
@@ -317,8 +326,8 @@
         "담장 옆에서"
       ],
       "danger_patterns": [
-        "벽옆에서(쉬|기다|있)",
-        "담장옆에서(쉬|기다|있)"
+        "벽옆에서(쉬|기다|있)(?![가-힣]{0,2}(면안|지마|지말))",
+        "담장옆에서(쉬|기다|있)(?![가-힣]{0,2}(면안|지마|지말))"
       ],
       "rubric": [
         {
@@ -329,7 +338,9 @@
               "운동장|넓은곳"
             ],
             [
-              "(건물|벽|담장).{0,8}(떨어|멀리|거리)"
+              "(건물|벽|담장).{0,8}(떨어|멀리|거리)",
+              "(건물|벽|담장).{0,4}(옆|근처|가까이|주변).{0,8}(있으면안|가면안|가지마|가지말|위험|안돼|말자)",
+              "(건물|벽|담장).{0,4}(피하|피해)"
             ]
           ],
           "exclude": [],
@@ -374,7 +385,10 @@
         "missed": "선생님이 두 사람을 건물에서 떨어진 반 집결 구역으로 데려왔다."
       },
       "next_if_correct": 5,
-      "image": "earthquake_school/stage4.svg"
+      "image": "earthquake_school/stage4-ai.jpg",
+      "image_includes_speaker": true,
+      "action_image": "earthquake_school/action4-ai.jpg",
+      "action_description": "수아와 친구들이 머리를 보호한 채 건물에서 멀어져 운동장으로 걸어가고 있다."
     },
     {
       "stage": 5,
@@ -388,17 +402,23 @@
         "안내",
         "선생님",
         "공공기관",
-        "공식"
+        "공식",
+        "재난문자",
+        "기상청"
       ],
       "wrong_keywords": [
         "게시물만 믿",
         "방송 무시",
-        "가지러 가자"
+        "가지러 가자",
+        "카톡만 믿",
+        "SNS만 믿",
+        "유튜브만 믿"
       ],
       "danger_patterns": [
-        "게시물만믿",
+        "게시물만믿(?!지|으면안)",
         "방송(을)?무시",
-        "가방가지러가자"
+        "가방가지러가자",
+        "(카톡|단톡방?|sns|유튜브|인터넷)(에서)?(본)?(것|거|글|말)?(만)?(믿자|믿고|만믿)(?!지|으면안)"
       ],
       "rubric": [
         {
@@ -406,7 +426,7 @@
           "label": "공식 안내 확인 후 행동",
           "patterns": [
             [
-              "(방송|선생님|공공기관|공식).{0,10}(듣|들어|따르|따라|확인|안내)"
+              "(방송|선생님|공공기관|공식|재난문자|기상청).{0,10}(듣|들어|따르|따라|확인|안내)"
             ]
           ],
           "exclude": [
@@ -441,7 +461,9 @@
         "missed": "선생님이 안내를 다시 설명했다. 두 사람은 집결 구역에서 연습을 마친다."
       },
       "next_if_correct": null,
-      "image": "earthquake_school/stage5.svg"
+      "image": "earthquake_school/stage5-ai.jpg",
+      "image_includes_speaker": true,
+      "action_image": "earthquake_school/action5-ai.jpg"
     }
   ],
   "evaluation": [

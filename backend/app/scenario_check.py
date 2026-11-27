@@ -61,6 +61,7 @@ def check(sc: dict) -> dict:
         errors.append("status: draft 또는 published 여야 합니다.")
     for key in ("title", "summary", "category"):
         _text(errors, key, sc.get(key))
+    _text(errors, "대피 완료 이미지", sc.get("cleared_image"), required=False)
     if not isinstance(sc.get("max_risk"), int) or not 1 <= sc["max_risk"] <= 20:
         errors.append("max_risk: 1~20 사이 정수여야 합니다.")
 
@@ -114,6 +115,10 @@ def check(sc: dict) -> dict:
         for key, label in (("title", "제목"), ("situation", "상황"), ("opening_line", "캐릭터 첫 대사"),
                            ("correct_action", "올바른 행동")):
             _text(errors, f"{where} > {label}", st.get(key))
+        _text(errors, f"{where} > 행동 이미지", st.get("action_image"), required=False)
+        _text(errors, f"{where} > 행동 이미지 설명", st.get("action_description"), required=False)
+        if "image_includes_speaker" in st and not isinstance(st["image_includes_speaker"], bool):
+            errors.append(f"{where} > 장면에 인물 포함: true 또는 false여야 합니다.")
         if st.get("character_id") not in char_ids:
             errors.append(f"{where} > 말하는 캐릭터: 캐릭터 목록에 없는 id 입니다 ('{st.get('character_id')}').")
         nxt = st.get("next_if_correct")
@@ -174,6 +179,19 @@ def check(sc: dict) -> dict:
             for s_idx in item.get("source_indices") or []:
                 if not isinstance(s_idx, int) or not 0 <= s_idx < source_count:
                     errors.append(f"{w} > 근거 출처 번호 {s_idx}: 출처 목록에 없습니다.")
+        alternatives = st.get("action_alternatives", [])
+        if not isinstance(alternatives, list):
+            errors.append(f"{where} > 행동 대체 컷: 목록이어야 합니다.")
+            alternatives = []
+        for option in alternatives:
+            w = f"{where} > 행동 대체 컷"
+            evidence_id = option.get("evidence") if isinstance(option, dict) else None
+            if not isinstance(evidence_id, str) or evidence_id not in rubric_ids:
+                errors.append(f"{w}: 단계에 등록된 행동 기준 id가 필요합니다.")
+                continue
+            _str_list(errors, f"{w} > 포함 표현", option.get("contains"), required=True)
+            _text(errors, f"{w} > 이미지", option.get("image"))
+            _text(errors, f"{w} > 이미지 설명", option.get("description"))
         effect = st.get("consequence")
         if effect is not None:
             if not isinstance(effect, dict) or not all(effect.get(k) for k in ("key", "success", "missed", "success_label", "missed_label")):

@@ -126,11 +126,16 @@ button.ghost { border: none; background: none; color: var(--muted); padding: 6px
 .scene-panel summary { padding: 18px 20px; cursor: pointer; font-size: 14px; font-weight: 700; }
 .scene-panel summary span { display: block; font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 5px; }
 .scene-content { padding: 0 20px 20px; }
-.scene-panel .scene { margin: 0 0 20px; padding: 0; min-height: 180px; overflow: hidden; }
-.scene-panel .scene img { display: block; width: 100%; aspect-ratio: 16/10; object-fit: cover; }
-.scene-placeholder { width: 100%; min-height: 210px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+.scene-panel .scene { position: relative; isolation: isolate; aspect-ratio: 3/2; margin: 0 0 20px; padding: 0; overflow: hidden; }
+.scene-frame { position: absolute; inset: 0; overflow: hidden; background: var(--scene-fill); opacity: 0; transition: opacity 440ms ease-in-out; }
+.scene-frame.is-visible { opacity: 1; }
+@starting-style { .scene-frame.is-visible { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .scene-frame { transition: none; } }
+.scene-background { display: block; width: 100%; height: 100%; object-fit: cover; }
+.scene-portrait { position: absolute; display: block; left: 50%; bottom: 0; transform: translateX(-50%); width: 82%; height: 98%; object-fit: contain; object-position: center bottom; filter: drop-shadow(0 6px 12px #10162180); }
+.scene-caption { position: absolute; bottom: 12px; left: 12px; max-width: calc(100% - 24px); padding: 5px 10px; border-radius: 6px; background: #151b2bec; font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.scene-placeholder { width: 100%; height: 100%; display: grid; place-items: center; }
 .scene-placeholder > span { font-size: 56px; }
-.scene-placeholder small { padding: 0 12px; text-align: center; }
 .scene-content .scene-stage { color: var(--muted); }
 .scene-heading { font-size: 23px; margin: 8px 0 14px; }
 .scene-description { white-space: pre-wrap; line-height: 1.8; margin: 0; overflow-wrap: anywhere; }
@@ -145,10 +150,11 @@ button.ghost { border: none; background: none; color: var(--muted); padding: 6px
   .scene-panel { flex: 0 0 auto; max-height: 30dvh; border-right: 0; border-bottom: 1px solid var(--line); }
   .scene-panel summary { padding: 10px 16px; }
   .scene-panel summary span { display: inline; margin-left: 8px; }
-  .scene-panel .scene { min-height: 0; width: 110px; float: left; margin: 0 14px 8px 0; }
-  .scene-placeholder { min-height: 90px; }
+  .scene-panel .scene { width: 150px; float: left; margin: 0 14px 8px 0; }
+  .scene-portrait { width: 90%; }
+  .scene-caption { bottom: 4px; left: 4px; max-width: calc(100% - 8px); padding: 2px 4px; font-size: 10px; }
   .scene-placeholder > span { font-size: 32px; }
-  .scene-placeholder small, .scene-guide { display: none; }
+  .scene-guide { display: none; }
   .scene-content { padding: 0 16px 12px; }
   .scene-heading { font-size: 17px; margin: 6px 0; }
   .scene-description { font-size: 13px; }
@@ -179,10 +185,10 @@ button.ghost { border: none; background: none; color: var(--muted); padding: 6px
   display: flex; gap: 14px; align-items: center; margin: 12px 16px 0; padding: 14px 16px;
   border-radius: var(--radius); color: #fff; transition: background .5s ease;
 }
-.scene.risk-low { background: linear-gradient(135deg, #495057, #868e96); }
-.scene.risk-mid { background: linear-gradient(135deg, #5c3d1e, #d9480f); }
-.scene.risk-high { background: linear-gradient(135deg, #5c1a1a, #e03131); }
-.scene { flex-shrink: 0; }
+.scene.risk-low { --scene-fill: linear-gradient(135deg, #495057, #868e96); }
+.scene.risk-mid { --scene-fill: linear-gradient(135deg, #5c3d1e, #d9480f); }
+.scene.risk-high { --scene-fill: linear-gradient(135deg, #5c1a1a, #e03131); }
+.scene { flex-shrink: 0; background: var(--scene-fill); }
 .scene-emoji { font-size: 34px; }
 .scene-stage { font-size: 12px; font-weight: 700; letter-spacing: .04em; opacity: .85; }
 .scene-title { font-size: 18px; font-weight: 700; margin-top: 2px; }
@@ -357,6 +363,8 @@ button.ghost { border: none; background: none; color: var(--muted); padding: 6px
 @media (max-width: 800px) and (max-height: 600px) {
   .scene-content, .composer-help, .condition-trail { display: none; }
   .scene-panel { max-height: 42px; }
+  .scene-panel.is-showing-cutaway { max-height: 30dvh; }
+  .scene-panel.is-showing-cutaway .scene-content { display: block; }
   .mission-strip { max-height: 42px; overflow-y: auto; }
   .dialogue-heading { padding: 8px 16px; }
 }

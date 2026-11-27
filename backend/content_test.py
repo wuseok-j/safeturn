@@ -6,7 +6,9 @@ os.environ['LLM_PROVIDER'] = 'mock'
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from fastapi.testclient import TestClient
 from app import harness, rules, scenario_check
+from app.main import app
 
 ROOT = Path(__file__).resolve().parents[1]
 from demo_cases import ANSWERS
@@ -22,8 +24,35 @@ class ContentTests(unittest.TestCase):
         for sid in ANSWERS:
             sc = harness.SCENARIOS[sid]
             self.assertEqual(scenario_check.check(sc)['errors'], [], sid)
+            paths = [sc['thumbnail'], sc['cleared_image']]
             for st in sc['stages']:
-                self.assertTrue((ROOT / 'frontend/public/scenes' / st['image']).is_file())
+                paths.extend([st['image'], st['action_image']])
+                paths.extend(option['image'] for option in st.get('action_alternatives', []))
+            for path in paths:
+                self.assertTrue((ROOT / 'frontend/public/scenes' / path).is_file(), path)
+
+    def test_action_scene_is_only_sent_for_a_confirmed_transition(self):
+        client = TestClient(app)
+        started = client.post('/sessions', json={'scenario_id': 'fire_office'}).json()
+        url = f"/sessions/{started['session_id']}/messages"
+        self.assertIsNone(started['action_scene'])
+        for text in ('그냥 기다리자', '불이야!'):
+            turn = client.post(url, json={'text': text}).json()
+            self.assertEqual(turn['stage'], 1)
+            self.assertIsNone(turn['action_scene'])
+        turn = client.post(url, json={'text': '비상벨을 누를게'}).json()
+        self.assertEqual(turn['stage'], 2)
+        self.assertEqual(turn['action_scene']['image'], 'fire_office/action1-ai.jpg')
+        count = turn['action_scene']['message_count']
+        self.assertEqual([m['role'] for m in turn['messages'][:count]], ['user', 'character'])
+        self.assertEqual(turn['messages'][count]['role'], 'narrator')
+        self.assertIsNone(client.get(f"/sessions/{started['session_id']}").json()['action_scene'])
+
+        started = client.post('/sessions', json={'scenario_id': 'fire_office'}).json()
+        for _ in range(3):
+            turn = client.post(f"/sessions/{started['session_id']}/messages", json={'text': '음...'}).json()
+        self.assertEqual(turn['stage'], 2)
+        self.assertIsNone(turn['action_scene'])
 
     def test_both_scenarios_complete_with_all_evidence(self):
         for sid, answers in ANSWERS.items():
