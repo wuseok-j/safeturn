@@ -214,6 +214,9 @@ function WorldTab({ sc, update }) {
             <Field label="역할" value={c.role} onChange={(v) => update((s) => { s.characters[i].role = v; })} className="wide" />
             <Field label="성격" value={c.personality} onChange={(v) => update((s) => { s.characters[i].personality = v; })} multiline={2} className="wide" />
             <Field label="말투" value={c.speech_style} onChange={(v) => update((s) => { s.characters[i].speech_style = v; })} className="wide" />
+            <Field label="브리핑 인물 소개" hint="이용자에게 보여줄 관계·성격·현재 심정" value={c.introduction || ""} onChange={(v) => update((s) => { s.characters[i].introduction = v; })} multiline={3} className="wide" />
+            <Field label="첫인상 대사" value={c.quote || ""} onChange={(v) => update((s) => { s.characters[i].quote = v; })} className="wide" />
+            <Field label="캐릭터 이미지" hint="/scenes/ 기준 상대 경로" value={c.image || ""} onChange={(v) => update((s) => { s.characters[i].image = v; })} className="wide" />
             {sc.characters.length > 1 && <button className="danger-link" onClick={() => update((s) => { s.characters.splice(i, 1); })}>이 캐릭터 삭제</button>}
           </div>
         ))}

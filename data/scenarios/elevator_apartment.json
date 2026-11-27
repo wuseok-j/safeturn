@@ -1,11 +1,11 @@
 {
   "id": "elevator_apartment",
-  "version": "1.0",
+  "version": "1.1",
   "status": "published",
   "title": "아파트 엘리베이터 갇힘",
   "summary": "퇴근길 아파트 엘리베이터가 층 사이에 멈췄다. 문을 억지로 열려는 친구와 함께 구조 요청부터 탈출까지 판단하세요.",
   "category": "승강기 사고",
-  "thumbnail": "elevator_apartment/stage1.svg",
+  "thumbnail": "elevator_apartment/cover-ai.png",
   "estimated_minutes": 6,
   "max_risk": 6,
   "briefing": {
@@ -42,7 +42,9 @@
       "role": "같은 아파트에 사는 친구",
       "personality": "답답한 걸 못 참고 바로 몸부터 움직이려 한다. 이유를 짧게 설명해 주면 따른다.",
       "speech_style": "반말. 한 번에 1~2문장.",
-      "image": null
+      "image": "elevator_apartment/haneul.png",
+      "introduction": "퇴근길이면 같은 엘리베이터에서 안부를 나누던 아파트 친구. 좁은 공간과 기약 없는 기다림 앞에서 평소의 장난기는 사라졌습니다. 조급해지는 하늘이에게, 지금 가장 가까이 있는 사람은 당신입니다.",
+      "quote": "왜 안 움직여…? 우리 둘밖에 없는 거 맞지?"
     }
   ],
   "stages": [
@@ -68,7 +70,9 @@
       ],
       "danger_patterns": [
         "문(을)?(억지로|강제로)?(열자|벌리자|벌려서|열어보자)",
-        "(억지로|강제로)(열자|벌리자|열어보자)"
+        "(억지로|강제로)(열자|벌리자|열어보자)",
+        "문.{0,5}(강제로|억지로).{0,3}(열어|벌려|열겠|열게)",
+        "문.{0,3}(벌릴게|열겠다|열게)"
       ],
       "rubric": [
         {
@@ -125,7 +129,10 @@
         "missed": "관리실에서 이상을 감지하고 인터폰으로 먼저 말을 걸었다. 잠시 후 연결이 끊긴다."
       },
       "next_if_correct": 2,
-      "image": "elevator_apartment/stage1.svg"
+      "image": "elevator_apartment/stage1-ai.png",
+      "image_includes_speaker": true,
+      "action_image": "elevator_apartment/action1-ai.png",
+      "action_description": "문을 강제로 열지 않고 비상호출버튼으로 갇힌 사실을 알린다."
     },
     {
       "stage": 2,
@@ -148,7 +155,8 @@
       "danger_patterns": [
         "천장.{0,6}(열자|올라가자|열어보자)",
         "뚜껑.{0,3}(열자|열어보자)",
-        "환기구.{0,4}(열자|나가자)"
+        "환기구.{0,4}(열자|나가자)",
+        "(천장|뚜껑|환기구).{0,6}(열어|열게|올라갈|올라가|탈출하|탈출할|나갈)"
       ],
       "rubric": [
         {
@@ -203,7 +211,10 @@
         "missed": "관리실이 대신 119에 신고했다. 구조대가 출동한다."
       },
       "next_if_correct": 3,
-      "image": "elevator_apartment/stage2.svg"
+      "image": "elevator_apartment/stage2-ai.png",
+      "image_includes_speaker": true,
+      "action_image": "elevator_apartment/action2-ai.png",
+      "action_description": "119에 신고하고 조작반의 승강기 번호를 알려 위치를 전달한다."
     },
     {
       "stage": 3,
@@ -230,7 +241,10 @@
         "흔들자",
         "흔들어보자",
         "점프하자",
-        "발로차자"
+        "발로차자",
+        "점프(해요|할게|하겠)",
+        "(엘리베이터|문|벽).{0,5}(흔들|발로차|차버리)",
+        "(계속|세게|같이).{0,4}(뛰어|뛰고|점프해|흔들어)"
       ],
       "rubric": [
         {
@@ -285,7 +299,10 @@
         "missed": "119 상담원이 전화로 진정하라고 안내했다. 하늘이가 겨우 자리에 앉는다."
       },
       "next_if_correct": 4,
-      "image": "elevator_apartment/stage3.svg"
+      "image": "elevator_apartment/stage3-ai.png",
+      "image_includes_speaker": true,
+      "action_image": "elevator_apartment/action3-ai.png",
+      "action_description": "자세를 낮추고 안전손잡이를 잡으며 침착하게 구조를 기다린다."
     },
     {
       "stage": 4,
@@ -309,7 +326,10 @@
         "뛰어내리자",
         "먼저(뛰어)?나가자",
         "틈으로나가자",
-        "먼저뛰어내릴"
+        "먼저뛰어내릴",
+        "(틈|문밖|복도)(으로|로)?.{0,4}(뛰어내|점프|기어나가|빠져나가)",
+        "(먼저|혼자).{0,4}(내릴게|나갈게|탈출하|탈출할)",
+        "구조대(원)?.{0,5}(무시하|안내무시|지시무시)"
       ],
       "rubric": [
         {
@@ -351,7 +371,10 @@
         "missed": "구조대원이 하늘이를 멈춰 세운 뒤 한 명씩 안전하게 구조했다."
       },
       "next_if_correct": 5,
-      "image": "elevator_apartment/stage4.svg"
+      "image": "elevator_apartment/stage4-ai.png",
+      "image_includes_speaker": true,
+      "action_image": "elevator_apartment/action4-ai.png",
+      "action_description": "구조대원의 지시와 도움을 받아 한 명씩 안전하게 복도로 나온다."
     },
     {
       "stage": 5,
@@ -376,7 +399,10 @@
       "danger_patterns": [
         "(다시|그냥)타자",
         "타고올라가자",
-        "다시타보자"
+        "다시타보자",
+        "(같은|고장난|점검중인|멈췄던)엘리베이터.{0,5}(타자|타요|탈게|타고|이용하)",
+        "다시.{0,4}(타요|탈게|타고가|이용하)",
+        "(그냥|일단).{0,3}타고(가|올라)"
       ],
       "rubric": [
         {
@@ -427,7 +453,10 @@
         "missed": "관리사무소가 운행을 막았다. 두 사람은 계단으로 올라가며 연습을 마친다."
       },
       "next_if_correct": null,
-      "image": "elevator_apartment/stage5.svg"
+      "image": "elevator_apartment/stage5-ai.png",
+      "image_includes_speaker": true,
+      "action_image": "elevator_apartment/action5-ai.png",
+      "action_description": "점검 전 승강기를 다시 이용하지 않고 관리사무소 안내를 확인해 계단으로 이동한다."
     }
   ],
   "evaluation": [
@@ -468,5 +497,6 @@
       "url": "https://www.law.go.kr/LSW/flDownload.do?flSeq=160115159",
       "note": "2026-11-27 확인. 임의 탈출 금지·구출자 지시 따르기·운행 정지 승강기 임의 이용 금지 항목 근거. 단계와 인물은 창작이며 공식 훈련 인증이 아님."
     }
-  ]
+  ],
+  "cleared_image": "elevator_apartment/cleared-ai.png"
 }

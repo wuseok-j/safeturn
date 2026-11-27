@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 export default function Briefing({ scenario, onStart, onBack }) {
   return (
     <main className="page briefing">
@@ -12,8 +14,8 @@ export default function Briefing({ scenario, onStart, onBack }) {
       <p className="eyebrow">{scenario.briefing?.role || "현장의 당사자"}</p>
       <p>{scenario.briefing?.mission || scenario.summary}</p>
       <div className="skill-tags">{scenario.briefing?.focus?.map(label => <span key={label}>{label}</span>)}</div>
-      <h2 className="section-title">함께할 인물</h2>
-      <div className="checks">{scenario.characters.map(c => <article className="check" key={c.name}><strong>{c.name}</strong><p>{c.role}</p></article>)}</div>
+      <div className="cast-heading"><div><span className="eyebrow">MEET YOUR COMPANIONS</span><h2 className="section-title">함께할 인물</h2></div><p>같은 현장, 서로 다른 마음.<br />당신의 한마디가 이들의 다음 행동을 바꿉니다.</p></div>
+      <div className="character-grid">{scenario.characters.map(c => <CharacterCard key={c.name} character={c} />)}</div>
       <h2 className="section-title">플레이 방법</h2>
       <ol className="instructions">
         <li>상황과 상대의 말을 읽고, 내가 할 행동을 구체적으로 입력하세요.</li>
@@ -25,4 +27,17 @@ export default function Briefing({ scenario, onStart, onBack }) {
       <div className="actions"><button className="primary" onClick={onStart}>준비 완료 · 현장으로</button></div>
     </main>
   );
+}
+
+function CharacterCard({ character: c }) {
+  const [broken, setBroken] = useState(false);
+  return <article className="character-card">
+    <div className="character-art">{c.image && !broken
+      ? <img src={`/scenes/${c.image.split('/').map(encodeURIComponent).join('/')}`} alt={`${c.name} 캐릭터`} onError={() => setBroken(true)} />
+      : <span className="character-initial" aria-hidden="true">{c.name.slice(0, 1)}</span>}<span className="character-art-label">함께하는 인물</span></div>
+    <div className="character-copy"><span className="character-role">{c.role}</span><h3>{c.name}</h3>
+      {c.quote && <blockquote>“{c.quote}”</blockquote>}
+      <p>{c.introduction || `${c.name}도 당신과 같은 현장에 있습니다. 상대의 말에 귀 기울이고, 지금의 판단을 함께 나누어 보세요.`}</p>
+    </div>
+  </article>;
 }

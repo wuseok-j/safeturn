@@ -97,6 +97,8 @@ def check(sc: dict) -> dict:
             char_ids.add(c["id"])
         for key, label in (("name", "이름"), ("role", "역할"), ("personality", "성격"), ("speech_style", "말투")):
             _text(errors, f"{where} > {label}", c.get(key))
+        for key in ('introduction', 'quote'):
+            _text(errors, f"{where} > {key}", c.get(key), required=False)
 
     stages = sc.get("stages")
     if not isinstance(stages, list) or not stages:
@@ -141,11 +143,10 @@ def check(sc: dict) -> dict:
         _str_list(errors, f"{where} > 행동 키워드", st.get("keywords"), required=True)
         _str_list(errors, f"{where} > 위험 키워드", st.get("wrong_keywords"))
         _str_list(errors, f"{where} > 상황 정보", st.get("facts"))
-        for j, p in enumerate(st.get("danger_patterns") or [], start=1):
-            if isinstance(p, str):
-                _regex(errors, f"{where} > 위험 행동 패턴 {j}", p)
-            else:
-                errors.append(f"{where} > 위험 행동 패턴 {j}: 글자여야 합니다.")
+        for key in ('danger_patterns', 'danger_defer_patterns'):
+            patterns = _str_list(errors, f"{where} > {key}", st.get(key))
+            for j, p in enumerate(patterns, start=1):
+                _regex(errors, f"{where} > {key} {j}", p)
 
         rubric = st.get("rubric") or []
         if not isinstance(rubric, list):

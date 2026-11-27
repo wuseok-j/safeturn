@@ -12,11 +12,12 @@ parser.add_argument('--ui', action='store_true', help='설치된 Edge로 UI 검�
 args = parser.parse_args()
 steps = []
 for script in ['db_test.py', 'cms_test.py', 'decision_test.py', 'play_test.py', 'report_test.py',
-               'safety_test.py', 'gemini_test.py', 'content_test.py', 'report_ai_test.py', 'reliability_test.py', 'dialogue_test.py', 'assessment_test.py']:
+               'safety_test.py', 'gemini_test.py', 'risk_test.py', 'content_test.py', 'report_ai_test.py', 'reliability_test.py', 'dialogue_test.py', 'assessment_test.py']:
     steps.append((script, [sys.executable, '-X', 'utf8', script], ROOT / 'backend'))
 steps.append(('frontend build', ['npm.cmd', 'run', 'build'], ROOT / 'frontend'))
 if args.ui:
     steps.append(('ui_check.py', [sys.executable, '-X', 'utf8', 'ui_check.py'], ROOT / 'backend'))
+    steps.append(('immersion_ui_check.py', [sys.executable, '-X', 'utf8', 'immersion_ui_check.py'], ROOT / 'backend'))
 results = []
 for label, command, cwd in steps:
     try:
