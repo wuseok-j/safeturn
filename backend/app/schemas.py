@@ -46,6 +46,12 @@ class Message(BaseModel):
     text: str
 
 
+class ActionScene(BaseModel):
+    image: str
+    description: str
+    message_count: int = 0
+
+
 class Turn(BaseModel):
     """한 턴의 결과: 새로 보여줄 메시지들 + 현재 상태."""
     session_id: str
@@ -54,10 +60,13 @@ class Turn(BaseModel):
     stage_title: str
     situation: str = ""
     speaker: str = ""
+    speaker_image: Optional[str] = None
     total_stages: int
     risk: int
     max_risk: int
     image: Optional[str] = None
+    image_includes_speaker: bool = False
+    action_scene: Optional[ActionScene] = None
     status: Literal["playing", "cleared", "failed"]
     conditions: list[str] = Field(default_factory=list)
     attempts_left: int = 3

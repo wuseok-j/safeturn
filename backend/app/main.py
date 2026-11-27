@@ -6,9 +6,9 @@
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import cms, harness, ai
+from . import cms, harness, ai, rules
 import os
-from .schemas import MessageRequest, Report, ScenarioSummary, StartRequest, Turn
+from .schemas import ActionScene, MessageRequest, Report, ScenarioSummary, StartRequest, Turn
 
 app = FastAPI(title="SafeTurn 재난·안전 롤플레잉 API")
 app.add_middleware(
@@ -38,15 +38,43 @@ def _get(session_id: str) -> harness.Session:
     return s
 
 
-def _turn(s: harness.Session, messages: list[dict]) -> Turn:
+def _turn(s: harness.Session, messages: list[dict], action_scene: ActionScene | None = None) -> Turn:
     st = harness.current_stage(s)
+    speaker = harness.character(s, st["character_id"])
+    speaker_image = speaker.get("image")
+    if not speaker_image:
+        # 이미지가 없었던 이전 세션에도 같은 캐릭터의 새 이미지를 표시한다.
+        sc = harness.SCENARIOS.get(s.scenario["id"], {})
+        speaker_image = next((c.get("image") for c in sc.get("characters", [])
+                              if c["id"] == speaker["id"] and c["name"] == speaker["name"]), None)
+    ending_image = s.scenario.get("cleared_image") if s.status == "cleared" else None
     return Turn(
         session_id=s.id, messages=messages,
         stage=st["stage"], stage_title=st["title"], total_stages=len(s.scenario["stages"]),
-        situation=st["situation"], speaker=harness.character(s, st["character_id"])["name"],
-        risk=s.risk, max_risk=s.scenario["max_risk"], image=st.get("image"), status=s.status,
+        situation=st["situation"], speaker=speaker["name"], speaker_image=speaker_image,
+        risk=s.risk, max_risk=s.scenario["max_risk"], image=ending_image or st.get("image"), status=s.status,
+        image_includes_speaker=bool(ending_image or st.get("image_includes_speaker")), action_scene=action_scene,
         conditions=harness.public_conditions(s), attempts_left=max(0, harness.MAX_TURNS_PER_STAGE - s.turns_in_stage) if s.status == "playing" else 0,
     )
+
+
+def _action_scene(s: harness.Session, stage: dict, messages: list[dict]) -> ActionScene | None:
+    number = stage["stage"]
+    if not stage.get("action_image") or s.stage_results.get(number) != "correct":
+        return None
+    # 행동을 보여주는 동안 이용자 발언과 상대의 반응만 먼저 표시한다.
+    message_count = 0
+    for message in messages:
+        if message["role"] not in ("user", "character"):
+            break
+        message_count += 1
+    evidence = s.evidence.get(number, {})
+    for option in stage.get("action_alternatives", []):
+        action = rules.action_text(evidence.get(option["evidence"], ""))
+        if any(keyword.strip() and rules.compact(keyword) in action for keyword in option["contains"]):
+            return ActionScene(image=option["image"], description=option["description"], message_count=message_count)
+    return ActionScene(image=stage["action_image"], description=stage.get("action_description") or stage["correct_action"],
+                       message_count=message_count)
 
 
 @app.get("/scenarios", response_model=list[ScenarioSummary])
@@ -91,10 +119,13 @@ def send_message(session_id: str, req: MessageRequest):
             return Turn(**previous['response'])
         if s.status != "playing":
             raise HTTPException(400, "이미 끝난 플레이입니다.")
-        if req.expected_stage is not None and req.expected_stage != harness.current_stage(s)['stage']:
+        stage = harness.current_stage(s)
+        if req.expected_stage is not None and req.expected_stage != stage['stage']:
             raise HTTPException(409, '장면이 이미 변경되어 최신 대화를 불러옵니다. 내용을 확인한 뒤 다시 입력하세요.')
         messages = harness.handle_message(s, req.text, persist_result=False)
-        response = _turn(s, messages)
+        advanced = s.status == "cleared" or harness.current_stage(s)["stage"] != stage["stage"]
+        action_scene = _action_scene(s, stage, messages) if advanced else None
+        response = _turn(s, messages, action_scene)
         if req.request_id:
             s.processed_requests[req.request_id] = {'text': req.text, 'response': response.model_dump()}
             while len(s.processed_requests) > 32:
