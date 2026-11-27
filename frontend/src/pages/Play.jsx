@@ -38,6 +38,7 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
   const scenePanel = useRef(null);
   const inFlight = useRef(false);
   const lastAttempt = useRef(null);
+  const inputBox = useRef(null);
 
   useEffect(() => {
     onBusyChange?.(!!pending);
@@ -56,6 +57,11 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
     const box = chatBox.current;
     if (box) box.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
   }, [messages, pending, error]);
+
+  // AI 답이 오면(입력창이 다시 켜지면) 커서를 입력창에 자동으로 둔다. 클릭 없이 바로 이어서 칠 수 있게.
+  useEffect(() => {
+    if (turn?.status === "playing" && !pending) inputBox.current?.focus({ preventScroll: true });
+  }, [turn, pending]);
 
   async function start(fresh = false) {
     setError("");
@@ -194,6 +200,7 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
       ) : (
         <form className="composer" onSubmit={send}>
           <input
+            ref={inputBox}
             value={input}
             aria-label="내가 할 행동"
             aria-describedby="composer-help"
