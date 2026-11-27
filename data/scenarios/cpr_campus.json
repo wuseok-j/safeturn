@@ -2,14 +2,14 @@
   "id": "cpr_campus",
   "version": "1.0",
   "status": "published",
-  "title": "캠퍼스에서 쓰러진 사람 발견",
+  "title": "학교에서 쓰러진 사람 발견",
   "summary": "도서관 앞에 사람이 쓰러져 있다. 그냥 지나가자는 친구와 함께 반응 확인부터 가슴압박, AED 사용까지 판단하세요.",
   "category": "응급처치",
   "thumbnail": "cpr_campus/stage1.svg",
   "estimated_minutes": 7,
   "max_risk": 7,
   "briefing": {
-    "role": "도서관 앞을 지나던 대학생",
+    "role": "도서관 앞을 지나던 고등학생",
     "mission": "친구 지우와 함께 쓰러진 사람을 돕고, 구급대가 올 때까지 심폐소생술을 이어 가세요.",
     "focus": [
       "반응 확인",
@@ -20,16 +20,16 @@
     ]
   },
   "role_doc": {
-    "place": "대학교 도서관 앞 광장",
+    "place": "학교 도서관 앞 광장",
     "situation": "오후에 친구 지우와 도서관 앞을 지나다가 바닥에 쓰러진 남성을 발견했다. 남성의 상태와 구조 진행은 각 단계 설명을 따른다.",
     "rules": [
-      "같은 과 친구처럼 짧고 자연스럽게 반응한다.",
+      "같은 반 친구처럼 짧고 자연스럽게 반응한다.",
       "필수 행동의 정답을 먼저 나열하지 않고 이용자가 판단하게 한다.",
       "시나리오에 없는 부상, 출혈, 사망을 만들어내지 않는다. 의학적 진단을 하지 않는다.",
       "진행·위험도는 서버가 결정한다. 선정적·잔인한 묘사를 하지 않는다."
     ],
     "world_facts": [
-      "장소는 대학교 도서관 앞 광장이다.",
+      "장소는 학교 도서관 앞 광장이다.",
       "도서관 1층 입구에 자동심장충격기(AED) 보관함이 있다.",
       "주변에 지나가는 학생들이 몇 명 있다.",
       "두 사람 모두 휴대전화를 가지고 있다."
@@ -39,10 +39,12 @@
     {
       "id": "jiwoo",
       "name": "한지우",
-      "role": "같은 과 친구",
+      "role": "같은 반 친구",
       "personality": "겁이 많아 처음엔 피하려 하지만, 무엇을 할지 분명히 말해 주면 적극적으로 돕는다.",
       "speech_style": "반말. 한 번에 1~2문장.",
-      "image": null
+      "image": "cpr_campus/jiwoo.png",
+      "introduction": "같은 반에서 늘 조용히 친구들을 챙기던 지우. 겁이 많아 낯선 일 앞에서는 한 발 물러서지만, 무엇을 해야 할지 알면 누구보다 먼저 손을 보탭니다. 지금 지우 곁에서 길을 알려 줄 사람은 당신입니다.",
+      "quote": "저 아저씨… 괜찮은 거겠지? 우리가 뭘 할 수 있을까?"
     }
   ],
   "stages": [
@@ -114,7 +116,8 @@
         "missed": "지나가던 학생이 먼저 다가가 불렀지만 남성은 아무 반응이 없다."
       },
       "next_if_correct": 2,
-      "image": "cpr_campus/stage1.svg"
+      "image": "cpr_campus/stage1.svg",
+      "action_image": "cpr_campus/stage1.svg"
     },
     {
       "stage": 2,
@@ -195,7 +198,8 @@
         "missed": "한참 뒤 지나가던 직원이 119에 신고하고 AED를 가지러 간다."
       },
       "next_if_correct": 3,
-      "image": "cpr_campus/stage2.svg"
+      "image": "cpr_campus/stage2.svg",
+      "action_image": "cpr_campus/stage2.svg"
     },
     {
       "stage": 3,
@@ -261,7 +265,8 @@
         "missed": "상담원의 다급한 지시에 따라 조금 늦게 가슴압박을 시작했다."
       },
       "next_if_correct": 4,
-      "image": "cpr_campus/stage3.svg"
+      "image": "cpr_campus/stage3.svg",
+      "action_image": "cpr_campus/stage3.svg"
     },
     {
       "stage": 4,
@@ -340,7 +345,8 @@
         "missed": "상담원의 설명을 듣고 위치와 세기를 고쳐 다시 누르기 시작한다."
       },
       "next_if_correct": 5,
-      "image": "cpr_campus/stage4.svg"
+      "image": "cpr_campus/stage4.svg",
+      "action_image": "cpr_campus/stage4.svg"
     },
     {
       "stage": 5,
@@ -421,7 +427,8 @@
         "missed": "상담원 안내로 다시 압박하며 AED를 붙였고, 곧 도착한 구급대에 남성을 넘겼다. 연습을 마친다."
       },
       "next_if_correct": null,
-      "image": "cpr_campus/stage5.svg"
+      "image": "cpr_campus/stage5.svg",
+      "action_image": "cpr_campus/stage5.svg"
     }
   ],
   "evaluation": [
@@ -472,5 +479,6 @@
       "url": "https://mediahub.seoul.go.kr/archives/1111411",
       "note": "2026-11-27 확인. AED 준비 전까지 심폐소생술 유지, 2분마다 분석 후 반복. 단계와 인물은 창작이며 공식 훈련 인증이 아님."
     }
-  ]
+  ],
+  "cleared_image": "cpr_campus/stage5.svg"
 }
