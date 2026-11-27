@@ -6,6 +6,7 @@ import Briefing from "./pages/Briefing.jsx";
 import AdminHome from "./pages/AdminHome.jsx";
 import AdminEditor from "./pages/AdminEditor.jsx";
 import { adminSession, api } from "./api.js";
+import { prepareSceneAudio } from "./sceneAudio.js";
 
 // 화면을 상태값 하나로 전환한다. (라우터 라이브러리 없이 단순하게)
 // 이용자:  list → briefing → play → report
@@ -19,6 +20,7 @@ export default function App() {
 
   // 운영자 화면에서 미리 플레이할 때 넘길 시나리오 정보 (Play 가 쓰는 필드만)
   const previewOf = (sc) => ({ id: sc.id, title: sc.title, category: sc.category, briefing: sc.briefing || {} });
+  const openPlay = (next) => { try { prepareSceneAudio(); } catch { /* 오디오 미지원이어도 플레이 가능 */ } setScreen({ name: 'play', ...next }); };
 
   return (
     <div className="app">
@@ -33,12 +35,12 @@ export default function App() {
       {screen.name === "list" && (
         <ScenarioList
           onSelect={(scenario) => setScreen({ name: "briefing", scenario })}
-          onResume={(active) => setScreen({ name: "play", scenario: active.scenario, resumeId: active.sessionId, playKey: Date.now() })}
+          onResume={(active) => openPlay({ scenario: active.scenario, resumeId: active.sessionId, playKey: Date.now() })}
         />
       )}
       {screen.name === "briefing" && (
         <Briefing scenario={screen.scenario}
-          onStart={() => setScreen({ name: "play", scenario: screen.scenario })}
+          onStart={() => openPlay({ scenario: screen.scenario })}
           onBack={() => setScreen({ name: "list" })} />
       )}
       {screen.name === "play" && (
@@ -55,14 +57,14 @@ export default function App() {
       {screen.name === "report" && (
         <Report
           sessionId={screen.sessionId}
-          onRetry={() => setScreen({ name: "play", scenario: screen.scenario, playKey: Date.now(), preview: screen.preview })}
+          onRetry={() => openPlay({ scenario: screen.scenario, playKey: Date.now(), preview: screen.preview })}
           onHome={() => setScreen(screen.preview ? { name: "adminEdit", id: screen.scenario.id } : { name: "list" })}
         />
       )}
       {screen.name === "admin" && (
         <AdminHome
           onEdit={(id) => setScreen({ name: "adminEdit", id })}
-          onPreview={(row) => setScreen({ name: "play", scenario: previewOf(row), preview: true, playKey: Date.now() })}
+          onPreview={(row) => openPlay({ scenario: previewOf(row), preview: true, playKey: Date.now() })}
         />
       )}
       {screen.name === "adminEdit" && (
@@ -70,7 +72,7 @@ export default function App() {
           token={adminSession.load()}
           scenarioId={screen.id}
           onBack={() => setScreen({ name: "admin" })}
-          onPreview={(sc) => setScreen({ name: "play", scenario: previewOf(sc), preview: true, playKey: Date.now() })}
+          onPreview={(sc) => openPlay({ scenario: previewOf(sc), preview: true, playKey: Date.now() })}
         />
       )}
     </div>

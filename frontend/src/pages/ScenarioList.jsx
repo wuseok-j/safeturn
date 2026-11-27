@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { activePlay, api } from "../api.js";
 import { categoryEmoji } from "../ui.js";
 
+const DEFAULT_COVERS = {
+  earthquake_school: "earthquake_school/stage1-ai.jpg",
+  elevator_apartment: "elevator_apartment/cover-ai.png",
+  fire_office: "fire_office/stage1-ai.jpg",
+};
+
 export default function ScenarioList({ onSelect, onResume }) {
   const [scenarios, setScenarios] = useState(null);
   const [error, setError] = useState("");
@@ -69,8 +75,10 @@ export default function ScenarioList({ onSelect, onResume }) {
 }
 
 function ScenarioCover({ scenario }) {
-  const [broken, setBroken] = useState(false);
-  return <div className="thumb">{scenario.thumbnail && !broken
-    ? <img src={`/scenes/${scenario.thumbnail.split('/').map(encodeURIComponent).join('/')}`} alt={`${scenario.title} 장면 미리보기`} onError={() => setBroken(true)} />
+  const [failed, setFailed] = useState([]);
+  const candidates = [...new Set([scenario.thumbnail, DEFAULT_COVERS[scenario.id]].filter(Boolean))];
+  const cover = candidates.find(path => !failed.includes(path));
+  return <div className="thumb">{cover
+    ? <img src={`/scenes/${cover.split('/').map(encodeURIComponent).join('/')}`} alt={`${scenario.title} 장면 미리보기`} onError={() => setFailed(previous => [...previous, cover])} />
     : categoryEmoji(scenario.category)}</div>;
 }

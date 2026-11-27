@@ -99,11 +99,28 @@ def _elevator_alternative(stage, value):
 
 
 def dangerous(stage: dict, text: str) -> bool:
-    value = action_text(text)
-    for pattern in stage.get("danger_patterns", []):
-        for match in re.finditer(pattern, value):
-            suffix = value[match.end():]
-            if re.match(r'(들어가지마|들어가면안|가지마|말자)', suffix):
-                continue
-            return True
+    # 문장별로 검사해 부정/질문/나중의 조건부 행동과 현재 실행을 구분한다.
+    # 한 문장의 안전한 조건이 뒤 문장의 위험 행동까지 숨기면 안 된다.
+    for sentence in re.split(r"(?<=[?？!！.。\n])", text):
+        value = action_text(sentence)
+        if not value or re.search(r'(될까|되나요|될까요|괜찮을까|괜찮나요)$', value):
+            continue
+        if stage.get('danger_defer_patterns') and any(
+                re.search(p, value) for p in stage['danger_defer_patterns']):
+            continue
+        for pattern in stage.get("danger_patterns", []):
+            for match in re.finditer(pattern, value):
+                suffix = value[match.end():]
+                prefix = value[:match.start()]
+                # 대상과 동사 사이의 '안'이 패턴의 .{0,n}에 포함된 경우도 제외한다.
+                if re.search(r'(안|못)(나가|나갈|들어가|들어갈|타|탈|이용|열|밀|뛰|달)', match.group()):
+                    continue
+                if re.search(r'(?:안|절대안|절대로안)$', prefix):
+                    continue
+                if re.match(r'(들어가지마|들어가면안|가지마|말자|면안|면위험|는건위험|는것은위험|지마|지말|지않|지못|면안)', suffix):
+                    continue
+                # 패턴이 동사 어간 일부에서 끝나도 '뛰어나가지 마' 등을 제외한다.
+                if re.match(r'[가-힣]{0,4}(지(?:는|도)?(?:마|말|않|못)|면안|면위험)', suffix):
+                    continue
+                return True
     return False

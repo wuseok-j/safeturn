@@ -7,6 +7,8 @@ class Character(BaseModel):
     name: str
     role: str
     image: Optional[str] = None
+    introduction: str = ""
+    quote: str = ""
 
 
 class ScenarioSummary(BaseModel):

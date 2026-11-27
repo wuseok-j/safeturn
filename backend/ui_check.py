@@ -73,6 +73,12 @@ else:
                         page.set_viewport_size({'width': 390, 'height': 500})
                         bounds = page.locator('.composer').bounding_box()
                         assert bounds['y'] + bounds['height'] <= 500, '작은 높이에서 입력창 가림'
+                        page.locator('.scene-panel summary').click()
+                        expect(page.locator('.scene-content')).to_be_visible()
+                        expect(stage_frame.locator('.scene-background')).to_be_visible()
+                        bounds = page.locator('.composer').bounding_box()
+                        assert bounds['y'] + bounds['height'] <= 500, '장면을 펼쳤을 때 입력창 가림'
+                        page.locator('.scene-panel summary').click()
                         page.set_viewport_size({'width': width, 'height': height})
                     if name == 'desktop' and sid == 'fire_office':
                         page.route('**/api/sessions/*/messages', lambda route: route.fulfill(

@@ -49,6 +49,8 @@ Turn에 `situation: string`, `speaker: string`을 추가한다. 현재 선택 �
 
 `GET /scenarios/{id}` 는 위 항목 하나를 돌려준다.
 
+`characters`에는 브리핑용 `introduction`(인물 소개)와 `quote`(첫인상 대사)가 추가된다. 두 필드는 선택이며 이전 시나리오는 빈 문자열로 반환한다. `personality`, `speech_style` 같은 내부 프롬프트 설정은 공개하지 않는다. `image`는 `/scenes/` 기준 캐릭터 이미지 경로다.
+
 ## 2. 플레이 시작 `POST /sessions`
 
 요청
