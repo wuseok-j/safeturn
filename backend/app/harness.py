@@ -367,8 +367,8 @@ def _enter_stage(s: Session) -> list[dict]:
 
 
 def _has_keyword(text: str, keywords: list[str]) -> bool:
-    t = "".join(text.split())
-    return any("".join(k.split()) in t for k in keywords)
+    t = rules.normalize("".join(text.split()))
+    return any(rules.normalize("".join(k.split())) in t for k in keywords)
 
 
 def _say(s: Session, out: list[dict], role: str, name: str, text: str) -> None:
