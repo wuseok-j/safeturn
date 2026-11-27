@@ -70,6 +70,7 @@ class ContentTests(unittest.TestCase):
         cases = {
             'fire_office': ['그냥 기다리자', '같이 타자', '숨 참고 뛰자', '확 열어', '같이 들어가자'],
             'earthquake_school': ['복도로 뛰자', '선생님 무시하고 먼저 뛰자', '같이 타자', '벽 옆에서 기다리자', '방송 무시하자'],
+            'elevator_apartment': ['문 벌려서 나가자', '천장 뚜껑 열자', '같이 뛰어보자', '먼저 뛰어내리자', '그냥 다시 타자'],
         }
         for sid, answers in ANSWERS.items():
             for index, (good, bad) in enumerate(zip(answers, cases[sid])):
