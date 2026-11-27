@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { activePlay, api } from "../api.js";
 import { categoryEmoji, riskLevel } from "../ui.js";
+import { useImmersion } from "../immersion.js";
 
 const MAX_LEN = 300;
 const ACTION_HOLD_MS = 3000;
@@ -39,6 +40,9 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
   const inFlight = useRef(false);
   const lastAttempt = useRef(null);
   const inputBox = useRef(null);
+  const immersion = useImmersion(scenario, turn);
+  const { ambience } = immersion;
+  const riskRatio = turn?.max_risk ? Math.min(1, turn.risk / turn.max_risk) : 0;
 
   useEffect(() => {
     onBusyChange?.(!!pending);
@@ -139,7 +143,11 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
   const sceneTitle = cleared ? "대피 완료" : turn?.stage_title;
 
   return (
-    <main className="play">
+    <main className={`play immersive-play theme-${ambience.theme} phase-${ambience.phase} ${immersion.effects ? "effects-on" : "effects-off"} ${immersion.reduced ? "motion-reduced" : ""}`}
+      data-risk={riskLevel(turn?.risk || 0, turn?.max_risk || 1)}
+      data-soundscape={ambience.sound || "silent"}
+      style={{ "--danger-opacity": turn?.status === "playing" ? riskRatio * 0.42 : 0, "--smoke-opacity": ambience.smoke }}>
+      <div className="immersion-veil" aria-hidden="true" />
       {/* 상단: 시나리오 제목, 단계 진행, 위험도 */}
       <div className="play-status">
         <div className="play-title">
@@ -154,6 +162,14 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
         )}
       </div>
 
+      <div className="ambience-bar">
+        <div className="ambience-status"><span className="ambience-dot" aria-hidden="true" /><span>{ambience.label}</span>{turn?.risk > 0 && turn.status === "playing" && <b>위험도 {turn.risk}/{turn.max_risk}</b>}</div>
+        <div className="immersion-controls">
+          <button type="button" aria-pressed={immersion.effects} onClick={immersion.toggleEffects}>화면 효과 {immersion.effects ? "켜짐" : "꺼짐"}</button>
+          <button type="button" aria-pressed={immersion.sound} onClick={immersion.toggleSound}>환경음 {immersion.sound ? "켜짐" : "꺼짐"}</button>
+        </div>
+        {immersion.audioError && <span className="ambience-error" role="status">{immersion.audioError}</span>}
+      </div>
       <div className="mission-strip">{scenario.briefing?.mission || "동료와 안전하게 대피하기"}
         {turn && <span>{ended ? "플레이 종료" : `행동 시도 기회 ${turn.attempts_left}회 · 질문·대화는 단계당 최대 6회`}</span>}
       </div>
@@ -165,6 +181,8 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
           <div className="scene-content">
             <div className={`scene risk-${riskLevel(turn.risk, turn.max_risk)}`}>
               <SceneVisual category={scenario.category} turn={turn} action={actionScene} />
+              <div className="scene-smoke" aria-hidden="true"><i /><i /><i /></div>
+              <div className="scene-particles" aria-hidden="true"><i /><i /><i /><i /><i /><i /></div>
             </div>
             <div className="scene-stage">STAGE {turn.stage} / {turn.total_stages}</div>
             <h2 className="scene-heading">{sceneTitle}</h2>

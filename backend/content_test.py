@@ -1,4 +1,4 @@
-"""화재·지진 시나리오와 장면 파일, 판정 사례를 오프라인 검증한다."""
+"""화재·지진·엘리베이터 시나리오와 장면 파일, 판정 사례를 오프라인 검증한다."""
 import os
 import tempfile
 os.environ['MIA_DB_PATH'] = os.path.join(tempfile.mkdtemp(), 'content.db')
@@ -53,6 +53,35 @@ class ContentTests(unittest.TestCase):
             turn = client.post(f"/sessions/{started['session_id']}/messages", json={'text': '음...'}).json()
         self.assertEqual(turn['stage'], 2)
         self.assertIsNone(turn['action_scene'])
+
+    def test_elevator_stage_action_and_completion_images(self):
+        client = TestClient(app)
+        turn = client.post('/sessions', json={'scenario_id': 'elevator_apartment'}).json()
+        self.assertEqual(turn['image'], 'elevator_apartment/stage1-ai.png')
+        self.assertTrue(turn['image_includes_speaker'])
+        url = f"/sessions/{turn['session_id']}/messages"
+        for number, text in enumerate(ANSWERS['elevator_apartment'], start=1):
+            turn = client.post(url, json={'text': text}).json()
+            self.assertEqual(turn['action_scene']['image'], f'elevator_apartment/action{number}-ai.png')
+            self.assertTrue(turn['action_scene']['description'])
+            self.assertEqual(turn['image'], f'elevator_apartment/stage{number + 1}-ai.png'
+                             if number < 5 else 'elevator_apartment/cleared-ai.png')
+        self.assertEqual(turn['status'], 'cleared')
+        resumed = client.get(url.removesuffix('/messages')).json()
+        self.assertEqual(resumed['image'], 'elevator_apartment/cleared-ai.png')
+        self.assertIsNone(resumed['action_scene'])
+
+    def test_public_cast_has_portraits_and_introductions_without_internal_prompts(self):
+        response = TestClient(app).get('/scenarios')
+        self.assertEqual(response.status_code, 200)
+        for scenario in response.json():
+            for character in scenario['characters']:
+                with self.subTest(character=character['name']):
+                    self.assertTrue(character['introduction'])
+                    self.assertTrue(character['quote'])
+                    self.assertTrue((ROOT / 'frontend/public/scenes' / character['image']).is_file())
+                    self.assertNotIn('personality', character)
+                    self.assertNotIn('speech_style', character)
 
     def test_both_scenarios_complete_with_all_evidence(self):
         for sid, answers in ANSWERS.items():

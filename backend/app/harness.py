@@ -113,7 +113,8 @@ def public_scenario(sc: dict) -> dict:
         "estimated_minutes": sc.get("estimated_minutes"),
         "total_stages": len(sc["stages"]),
         "briefing": sc.get("briefing", {}),
-        "characters": [{"name": c["name"], "role": c["role"], "image": c.get("image")}
+        "characters": [{"name": c["name"], "role": c["role"], "image": c.get("image"),
+                        "introduction": c.get("introduction") or "", "quote": c.get("quote") or ""}
                        for c in sc["characters"]],
     }
 
