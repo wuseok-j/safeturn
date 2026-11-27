@@ -52,6 +52,7 @@ class ActionScene(BaseModel):
     image: str
     description: str
     message_count: int = 0
+    kind: Literal['action', 'outcome', 'partial'] = 'action'
 
 
 class Turn(BaseModel):
@@ -72,6 +73,8 @@ class Turn(BaseModel):
     status: Literal["playing", "cleared", "failed"]
     conditions: list[str] = Field(default_factory=list)
     attempts_left: int = 3
+    stage_mistakes: int = 0
+    confirmed_actions: list[str] = Field(default_factory=list)
 
 
 class Source(BaseModel):

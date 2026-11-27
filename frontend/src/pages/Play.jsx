@@ -5,6 +5,7 @@ import { useImmersion } from "../immersion.js";
 
 const MAX_LEN = 300;
 const ACTION_HOLD_MS = 3000;
+const OUTCOME_HOLD_MS = 1800;
 
 function sceneAsset(path) {
   return `/scenes/${path.split("/").map(encodeURIComponent).join("/")}`;
@@ -113,7 +114,8 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
         setMessages(prev => [...prev, ...t.messages.slice(0, shown)]);
         remainingMessages = t.messages.slice(shown);
         setActionScene(t.action_scene);
-        await new Promise(resolve => window.setTimeout(resolve, ACTION_HOLD_MS));
+        const hold = t.action_scene.kind === "action" ? ACTION_HOLD_MS : OUTCOME_HOLD_MS;
+        await new Promise(resolve => window.setTimeout(resolve, hold));
         if (panel && !wasOpen && t.status !== "cleared") panel.open = false;
         setActionScene(null);
       }
@@ -171,7 +173,7 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
         {immersion.audioError && <span className="ambience-error" role="status">{immersion.audioError}</span>}
       </div>
       <div className="mission-strip">{scenario.briefing?.mission || "동료와 안전하게 대피하기"}
-        {turn && <span>{ended ? "플레이 종료" : `행동 시도 기회 ${turn.attempts_left}회 · 질문·대화는 단계당 최대 6회`}</span>}
+        {turn && <span>{ended ? "플레이 종료" : `이 장면의 위험 행동 ${turn.stage_mistakes ?? 0}회`}</span>}
       </div>
       {!!turn?.conditions?.length && <div className="condition-trail" aria-label="이전 선택의 영향">{turn.conditions.map((label, i) => <span key={i}>{label}</span>)}</div>}
       <div className={`play-workspace ${!turn ? "is-loading" : ""}`}>
@@ -187,6 +189,7 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
             <div className="scene-stage">STAGE {turn.stage} / {turn.total_stages}</div>
             <h2 className="scene-heading">{sceneTitle}</h2>
             <p className="scene-description">{cleared ? "함께 안전한 장소에 도착했습니다." : actionScene?.description ?? turn.situation}</p>
+            {!!turn.confirmed_actions?.length && <p className="scene-progress">확인한 행동 · {turn.confirmed_actions.join(" · ")}</p>}
             {!cleared && <p className="scene-guide">선택한 행동은 다음 상황에 남습니다. 결과에서 내 발언과 판단 근거를 확인할 수 있습니다.</p>}
           </div>
         </details>
@@ -241,7 +244,9 @@ export default function Play({ scenario, onFinish, onExit, adminToken, resumeId,
 
 function SceneVisual({ category, turn, action }) {
   const frame = action ? {
-    image: action.image, alt: action.description, caption: "행동 확인", kind: "action",
+    image: action.image, alt: action.description,
+    caption: action.kind === "outcome" ? "행동 결과" : action.kind === "partial" ? "중간 행동 확인" : "행동 확인",
+    kind: action.kind ?? "action",
   } : {
     image: turn.image, alt: turn.status === "cleared" && turn.image_includes_speaker ? "안전하게 대피한 뒤 안도하며 웃는 인물들" : `${turn.stage_title} 장면`,
     portrait: turn.speaker_image, integrated: turn.image_includes_speaker,

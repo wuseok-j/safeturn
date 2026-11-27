@@ -45,6 +45,19 @@ class GeminiTests(unittest.TestCase):
         self.assertEqual(self.judge()['verdict'], 'correct')
         self.assertEqual(self.post.call_count, 2)
 
+    def test_interaction_uses_the_same_request_and_response_schema(self):
+        outcome = '금속 표면을 두드리자 주위에 소리가 울린다.'
+        self.post.return_value = self.response(json.dumps({'verdict': 'unclear', 'intent': 'action',
+                                                            'reply': '나도 들었어.', 'reason': 'action',
+                                                            'interaction': outcome, 'interaction_visual': 'knock'}))
+        result = self.judge()
+        self.assertEqual(result['interaction'], outcome)
+        self.assertEqual(result['interaction_visual'], 'knock')
+        self.assertEqual(self.post.call_count, 1)
+        schema = self.post.call_args.kwargs['json']['generationConfig']['responseSchema']
+        self.assertIn('interaction', schema['required'])
+        self.assertIn('knock', schema['properties']['interaction_visual']['enum'])
+
     def test_invalid_object_falls_back(self):
         self.post.return_value = self.response('[]')
         self.assertEqual(self.judge()['reason'], 'fallback')

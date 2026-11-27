@@ -22,7 +22,7 @@ def enrich(report):
         elif risk_end:
             reason, code = '위험도가 한도에 도달해 이 단계에서 플레이가 중단됐습니다.', 'risk_limit'
         else:
-            reason = f'판단 기회 {check.get("attempts", len(actions))}회 안에 필수 행동 {len(evidence)}개 중 {count}개를 확인했습니다.'
+            reason = f'필수 행동 {len(evidence)}개 중 {count}개를 확인했습니다.'
             if missing:
                 reason += ' 추가 확인이 필요한 행동: ' + ' · '.join(missing) + '.'
             code = 'missing_actions'

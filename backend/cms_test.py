@@ -109,8 +109,7 @@ class CmsTests(unittest.TestCase):
         """새로 만든 1단계 뼈대도 하네스에서 끝까지 돌아야 한다."""
         self.create()
         t = self.c.post("/sessions", headers=H, json={"scenario_id": "school_fire"}).json()
-        for _ in range(3):
-            t = self.c.post(f"/sessions/{t['session_id']}/messages", json={"text": "음..."}).json()
+        t = self.c.post(f"/sessions/{t['session_id']}/messages", json={"text": "행동 키워드"}).json()
         self.assertEqual(t["status"], "cleared")
         self.assertEqual(self.c.get(f"/sessions/{t['session_id']}/report").status_code, 200)
 

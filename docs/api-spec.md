@@ -13,7 +13,7 @@ Report에 `feedback_source: "ai" | "basic"`을 추가한다. checks[].comment는
 - UI는 전송 중 중복 제출과 이동을 막고, 통신 실패 후 같은 내용을 재전송할 때 같은 id를 사용한다. 409에서는 최신 대화를 복원한다.
 - 캐시된 진행 중 세션도 DB의 마지막 활동을 기준으로 만료를 확인한다. API 장애는 판단 기회·위험도에 영향을 주지 않으며 한도·네트워크·설정 문제를 구분해 안내한다.
 
-위험도 증가 정책: 서버의 danger_patterns에 등록된 위험 행동이 확인될 때만 wrong으로 계산한다. AI의 wrong 제안만으로 위험도를 높이지 않는다. 미등록 표현은 아직 인식하지 못할 수 있다.
+위험도와 단계별 위험 행동 횟수는 서버의 `danger_patterns` 또는 `if_wrong.events[].patterns`에 등록된 위험 행동이 확인될 때만 증가한다. 미등록 표현은 인식하지 못할 수 있다.
 
 Turn에 `situation: string`, `speaker: string`을 추가한다. 현재 선택 상태에 맞게 서버가 확정한 장면 설명과 발화자 이름이다. 시작·발언·이어하기 응답에 공통 포함된다. 왼쪽 장면 패널은 narrator 메시지를 추측해서 사용하지 않고 situation을 표시한다. 기존 필드는 유지한다.
 
@@ -156,7 +156,10 @@ Turn에 `situation: string`, `speaker: string`을 추가한다. 현재 선택 �
 |---|---|---|
 | ScenarioSummary | `briefing: {role, mission, focus}` | 공개 가능한 역할·목표·연습 역량. 판정 정규식은 비공개 |
 | Turn | `conditions: string[]` | 앞선 단계의 확인·도움 이력 표시 |
-| Turn | `attempts_left: int` | 현재 단계의 남은 판단 기회, 종료 시 0 |
+| Turn | `attempts_left: int` | 기존 클라이언트용 값. 현재 단계의 확인된 위험 행동마다 3에서 1씩 감소하며 최솟값은 0, 종료 시 0. 단계 전환에는 사용하지 않음 |
+| Turn | `stage_mistakes: int` | 현재 단계에서 서버가 확인한 위험 행동 횟수 |
+| ActionScene | `kind: action \| outcome \| partial` | 안전 행동 확인 컷, 행동 결과 컷 또는 다음 판단으로 이어지는 중간 컷 |
+| Turn | `confirmed_actions: string[]` | 진행 중인 현재 장면에서 이미 확인한 행동의 표시 이름 |
 | CheckResult | `evidence: Evidence[]` | 행동 항목별 확인 여부·실제 발언·근거 출처 |
 | Report | `timeline: Decision[]` | 평가된 입력별 판정·위험도 변화·결과 |
 | Report | `conditions: string[]` | 최종 선택 이력 |
@@ -166,7 +169,7 @@ Turn에 `situation: string`, `speaker: string`을 추가한다. 현재 선택 �
 
 `Decision`: `{stage, title, action, verdict, risk_before, risk_after, outcome}`. verdict는 기존 correct/wrong/unclear다. 입력 차단과 AI 장애는 타임라인과 판단 횟수에서 제외한다.
 
-여러 발언에서 확인한 행동을 단계별로 누적한다. 위험 행동이 판정되면 그 단계의 근거를 초기화하고 위험도를 올린다. 모든 필수 행동을 확인해야 통과하며, 기회가 소진되면 실패 기록과 도움받는 전개를 남긴다. `cleared`는 건물 밖 도착을 의미하며 모든 행동 통과를 뜻하지 않는다.
+여러 발언에서 확인한 행동을 단계별로 누적한다. 위험 행동이 확인되면 그 단계의 근거를 초기화하고, 결과를 `messages`와 리포트의 `timeline`에 남긴다. 누적 위험도가 한도 미만이면 같은 단계에서 이어가며 `max_risk`에 도달하면 실패로 종료한다. 질문과 잡담에는 횟수 제한을 적용하지 않는다. 모든 필수 행동이 확인되면 다음 단계로 진행한다.
 
 현재는 JSON의 제한된 표현 패턴으로 근거를 검증한다. 미등록 표현·복잡한 부정·인용은 오판할 수 있다. 상세 한계와 시연 방법은 [설계 문서](decision-design.md)를 따른다.
 

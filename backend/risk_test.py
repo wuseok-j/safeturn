@@ -15,8 +15,8 @@ from demo_cases import ANSWERS
 # 각 단계의 실행 의사 표현. AI가 unclear라도 서버에서 위험으로 판정해야 한다.
 CASES = {
     'earthquake_school': [
-        ['빨리 밖으로 나가자', '바깥으로 나갈게', '복도로 달려가자', '창문 쪽으로 가자'],
-        ['친구를 밀고 먼저 가자', '선생님 안내 무시하고 가자', '혼자 뛰어나가자'],
+        ['빨리 밖으로 나가자', '바깥으로 나갈게', '복도로 달려가자', '창문 쪽으로 가자', '기다리지 말고 먼저 나가자'],
+        ['친구를 밀고 먼저 가자', '선생님 안내 무시하고 가자', '혼자 뛰어나가자', '기다리지 말고 먼저 나가자'],
         ['엘베 타고 내려가자', '승강기를 이용하자', '엘리베이터 탈게'],
         ['건물 바로 옆에서 기다리자', '외벽 밑에서 쉬자', '담장 가까이 서있자'],
         ['가방 찾으러 교실로 돌아가자', '건물에 다시 들어가자', '학교방송 무시하자'],
@@ -75,6 +75,10 @@ class RiskTests(unittest.TestCase):
             ('earthquake_school', 0, '밖으로 나가도 될까'),
             ('earthquake_school', 0, '흔들림이 멈추면 밖으로 나가자'),
             ('earthquake_school', 0, '흔들림이 멈춘 뒤 밖으로 나가자'),
+            ('earthquake_school', 0, '흔들림이 멈춘 뒤 먼저 나가자'),
+            ('earthquake_school', 1, '먼저 나가지 말고 줄 서자'),
+            ('earthquake_school', 1, '선생님 지시에 따라 먼저 나가자'),
+            ('earthquake_school', 1, '선생님 안내가 있을 때까지 기다리자'),
             ('earthquake_school', 2, '엘리베이터 타지 말고 계단으로 가자'),
             ('earthquake_school', 3, '건물 옆에서 기다리지 마'),
             ('fire_office', 4, '노트북 가지러 들어가지 마'),
@@ -105,6 +109,32 @@ class RiskTests(unittest.TestCase):
             report = client.get(f'/sessions/{session.id}/report').json()
             self.assertEqual(report['timeline'][-1]['risk_after'], session.risk)
 
+    def test_leaving_early_plays_out_before_the_character_reacts(self):
+        client = TestClient(app)
+        examples = [('earthquake_school', 0, '물건이 바로 앞 바닥으로 떨어졌다', 'outcome-falling-object.jpg'),
+                    ('earthquake_school', 1, '어깨가 부딪혔다', 'outcome-queue-collision.jpg'),
+                    ('elevator_apartment', 2, '문은 열리지 않고', 'outcome-door-jolt.jpg'),
+                    ('elevator_apartment', 3, '발이 미끄러졌다', 'outcome-threshold-slip.jpg')]
+        with patch('app.ai.judge_action', return_value={'reason': 'fallback', 'error_code': 'quota'}) as judge:
+            for sid, index, outcome, image in examples:
+                with self.subTest(sid=sid, stage=index + 1):
+                    session, _ = harness.create_session(sid)
+                    self.addCleanup(harness.SESSIONS.pop, session.id, None)
+                    session.stage_index = index
+                    response = client.post(f'/sessions/{session.id}/messages',
+                                           json={'text': '기다리지 말고 먼저 나가자'})
+                    self.assertEqual(response.status_code, 200)
+                    turn = response.json()
+                    self.assertEqual(turn['stage'], index + 1)
+                    self.assertEqual(turn['status'], 'playing')
+                    self.assertEqual(turn['stage_mistakes'], 1)
+                    self.assertGreater(turn['risk'], 0)
+                    self.assertEqual([m['role'] for m in turn['messages']], ['user', 'narrator', 'character'])
+                    self.assertIn(outcome, turn['messages'][1]['text'])
+                    self.assertEqual(session.timeline[-1]['outcome'], turn['messages'][1]['text'])
+                    self.assertEqual(turn['action_scene']['image'], f'{sid}/{image}')
+            judge.assert_not_called()
+
     def test_ai_wrong_alone_still_cannot_raise_risk(self):
         session, _ = harness.create_session('earthquake_school')
         self.addCleanup(harness.SESSIONS.pop, session.id, None)
@@ -112,7 +142,7 @@ class RiskTests(unittest.TestCase):
                 'verdict': 'wrong', 'intent': 'action', 'reply': '불안해.', 'reason': 'test'}):
             harness.handle_message(session, '어떻게 해야 할지 생각 중이야')
         self.assertEqual(session.risk, 0)
-        self.assertEqual(session.timeline[-1]['verdict'], 'unclear')
+        self.assertEqual(session.timeline, [])
 
     def test_scenarios_validate(self):
         for sid in CASES:

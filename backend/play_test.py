@@ -57,10 +57,10 @@ assert injected["stage"] == 1 and injected["risk"] == 0 and injected["status"] =
 
 bad = play("3) 위험한 플레이", [
     "괜찮겠지 뭐, 계속 일하자",
+    "아직 움직이지 마.",
     "그냥 기다리자",
-    "얼른 타!",
-    "같이 타자",
+    "그냥 기다리자",
 ])
-assert bad["status"] == "failed"
+assert bad["status"] == "failed" and bad["stage"] == 1 and bad["stage_mistakes"] == 3
 
 print("\n✅ 3가지 플레이 모두 예상대로 동작")

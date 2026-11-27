@@ -25,13 +25,15 @@ from . import ai, db, safety, rules, dialogue, report_explanations
 
 SCENARIO_DIR = Path(__file__).resolve().parents[2] / "data" / "scenarios"
 
-MAX_TURNS_PER_STAGE = 3   # 한 단계에서 판단할 기회. 다 쓰면 서버가 '실패'로 기록하고 다음 단계로 넘긴다.
-# 질문·대화는 판단 기회를 쓰지 않는다 (롤플레잉 자유도). 대신 단계당 횟수에 상한을 둔다 (토큰 비용 보호).
-# 상한을 넘으면 그 뒤의 말은 모두 판단 시도로 센다.
-MAX_FREE_TURNS_PER_STAGE = 6
+LEGACY_ATTEMPTS_PER_STAGE = 3  # 기존 API의 attempts_left 계산에만 사용한다.
+MAX_HISTORY_MESSAGES = 16
 VERDICTS = {"correct", "wrong", "unclear"}
-INTENTS = {"action", "question", "chat"}
 MAX_REPLY_CHARS = 300     # 모델 대사가 너무 길면 자른다.
+INTERACTION_IMAGES = {
+    'knock': 'interactions/action-knock.jpg',
+    'light': 'interactions/action-light.jpg',
+    'touch': 'interactions/action-hands.jpg',
+}
 
 # 키워드 가드: 모델이 correct 라고 해도, 이용자 입력에 그 단계의 행동 키워드가 하나도 없으면 인정하지 않는다.
 # → 모델이 속아서 correct 를 내도 진행이 조작되지 않는 2차 안전장치.
@@ -56,8 +58,8 @@ class Session:
     scenario: dict
     stage_index: int = 0
     risk: int = 0
-    turns_in_stage: int = 0
-    free_turns_in_stage: int = 0                # 이번 단계에서 판단 기회를 쓰지 않은 질문·대화 수
+    turns_in_stage: int = 0                    # 현재 단계의 위험 행동 횟수 (기존 DB 필드)
+    free_turns_in_stage: int = 0                # 판단 기록에 포함되지 않은 대화 수
     status: str = "playing"                    # playing | cleared | failed
     stage_results: dict[int, str] = field(default_factory=dict)   # {단계번호: "correct" | "failed"}
     transcript: list[dict] = field(default_factory=list)          # {stage, role, name, text}
@@ -149,9 +151,11 @@ def get_session(session_id: str) -> Session | None:
     if not data:
         return None
     state = data["state"]
+    number = data['scenario']['stages'][data['stage_index']]['stage']
+    mistakes = sum(event['stage'] == number and event['verdict'] == 'wrong' for event in data['decisions'])
     s = Session(
         id=data["id"], scenario=data["scenario"], stage_index=data["stage_index"], risk=data["risk"],
-        turns_in_stage=data["turns_in_stage"], free_turns_in_stage=data["free_turns"], status=data["status"],
+        turns_in_stage=mistakes, free_turns_in_stage=data["free_turns"], status=data["status"],
         blocked_count=data["blocked_count"],
         # JSON 은 dict 키가 글자로 저장되므로 단계 번호를 다시 숫자로
         stage_results={int(k): v for k, v in state.get("stage_results", {}).items()},
@@ -209,91 +213,125 @@ def _handle_message(s: Session, text: str) -> list[dict]:
         _say(s, out, "system", "안내", safety.REDIRECT[flag])
         return out
 
-    s.actions.setdefault(st["stage"], []).append(text)
+    # 2) 등록된 위험 행동은 서버가 실행하고 그 결과를 먼저 보여준다.
+    danger = rules.danger_outcome(st, text)
+    if danger is not None:
+        _apply_danger(s, st, ch, text, danger, out)
+        return out
 
-    # 2) AI 판정 제안
+    # 3) 확인된 일부 행동을 먼저 실행하고, 남은 행동으로 이어 간다.
+    number = st['stage']
+    observed = rules.observe(st, text)
+    evidence = s.evidence.get(number, {})
+    fresh = [key for key in observed if key not in evidence]
+    missing = [item for item in st.get('rubric', []) if item['id'] not in evidence and item['id'] not in observed]
+    if fresh and missing:
+        _apply_partial(s, st, ch, text, fresh, missing, out)
+        return out
+
+    # 4) 나머지 입력의 캐릭터 대사 및 판정 제안
     history = [t for t in s.transcript if t["stage"] == st["stage"]
-               and not (t["role"] == "user" and safety.check(t["text"]))]
+               and not (t["role"] == "user" and safety.check(t["text"]))][-MAX_HISTORY_MESSAGES:]
     suggestion = ai.judge_action(s.scenario, _ai_context(s, st, text), ch, text, history)
     failed = (not isinstance(suggestion, dict) or suggestion.get("reason") == "fallback"
               or suggestion.get("verdict") not in VERDICTS or not isinstance(suggestion.get("reply"), str))
     _log_ai_call(s, suggestion, not failed)
     if failed:
         # API 장애를 이용자의 판단 실패로 계산하지 않는다.
-        s.actions[st["stage"]].pop()
         notice = {
             'quota': '현재 이용 요청이 많아 응답을 받을 수 없습니다. 잠시 기다린 뒤 다시 입력해 주세요.',
             'configuration': 'AI 연결 설정을 확인하지 못했습니다. 운영자에게 연결 상태를 확인해 주세요.',
             'network': '연결이 지연되어 응답을 확인하지 못했습니다. 잠시 후 다시 말해 주세요.',
             'blocked': '이번 발언의 응답을 생성하지 못했습니다. 상황에 맞는 다른 표현으로 말해 주세요.',
         }.get(suggestion.get('error_code') if isinstance(suggestion, dict) else None, '응답을 확인하지 못했습니다. 잠시 후 다시 말해 주세요.')
-        _say(s, out, "system", "안내", notice + ' 판단 기회와 위험도는 유지됩니다.')
+        _say(s, out, "system", "안내", notice + ' 위험 행동 횟수와 위험도는 유지됩니다.')
         return out
 
-    # 3) 서버 검증 — 형식이 이상하면 안전한 기본값으로
-    verdict = suggestion.get("verdict")
-    if verdict not in VERDICTS:
-        verdict = "unclear"
-    if verdict == "correct" and KEYWORD_GUARD and not _has_keyword(text, st["keywords"]):
+    # 5) 필수 행동은 서버가 확인한다.
+    verdict = "correct" if suggestion['verdict'] == 'correct' else 'unclear'
+    if verdict == "correct" and KEYWORD_GUARD and not _has_keyword(rules.action_text(text), st["keywords"]):
         verdict = "unclear"
     before_risk = s.risk
-    observed = rules.observe(st, text)
-    evidence = s.evidence.setdefault(st["stage"], {})
-    server_danger = rules.dangerous(st, text)
-    if server_danger:
-        verdict = "wrong"
-    elif verdict == "wrong":
-        # AI 오판만으로 위험도를 올리지 않는다. 미등록 위험 표현은 추가 검수 대상이다.
-        verdict = "unclear"
+    evidence = s.evidence.setdefault(number, {})
     if st.get("rubric"):
-        if verdict == "wrong":
-            evidence.clear()
-        if verdict != "wrong":
-            for item_id in observed:
-                evidence[item_id] = text
-        complete = all(item["id"] in evidence for item in st["rubric"])
-        if verdict != "wrong":
-            verdict = "correct" if complete else "unclear"
-    reply = dialogue.choose_reply(st, ch, text, verdict, suggestion, history, observed)
+        for item_id in observed:
+            evidence.setdefault(item_id, text)
+        verdict = "correct" if all(item["id"] in evidence for item in st["rubric"]) else "unclear"
+    interaction = suggestion.get('interaction')
+    interaction = interaction.strip()[:MAX_REPLY_CHARS] if isinstance(interaction, str) else ''
+    if (verdict != 'unclear' or suggestion.get('intent') != 'action'
+            or not rules.action_text(text) or safety.check(interaction)):
+        interaction = ''
+    if interaction:
+        visual = suggestion.get('interaction_visual')
+        image = INTERACTION_IMAGES.get(visual) if isinstance(visual, str) else None
+        _say(s, out, 'narrator', '행동 결과', interaction)
+        out[-1]['outcome_image'] = image or st.get('image')
+    reply = suggestion['reply'].strip()[:MAX_REPLY_CHARS] if interaction else ''
+    if reply and safety.check(reply):
+        suggestion = {**suggestion, 'reply': ''}
+        reply = ''
+    if not reply:
+        reply = dialogue.choose_reply(st, ch, text, verdict, suggestion, history, observed)
     _say(s, out, "character", ch["name"], reply)
 
-    # 4) 판단 시도인지, 질문·대화인지 — 서버가 최종 결정
-    #    AI의 intent 는 '기회를 덜 쓰게' 만들 수만 있다. 근거·위험 행동이 잡히면 AI 분류와 무관하게 시도로 센다.
-    intent = suggestion.get("intent") if suggestion.get("intent") in INTENTS else "action"
-    is_attempt = (verdict != "unclear" or bool(observed) or intent == "action"
-                  or s.free_turns_in_stage >= MAX_FREE_TURNS_PER_STAGE)
-    if not is_attempt:
+    # 6) 확인한 행동과 현장에서 일어난 시도를 판단 기록에 남긴다.
+    actions = s.actions.setdefault(st["stage"], [])
+    if verdict == "unclear" and not observed and not interaction:
         s.free_turns_in_stage += 1
-        s.actions[st["stage"]].pop()   # 리포트의 '판단 기록'에는 넣지 않는다 (대화 기록에는 남음)
         return out
+    actions.append(text)
 
-    # 5) 서버 규칙으로 진행 결정
-    s.turns_in_stage += 1
     if verdict == "correct":
         s.stage_results[st["stage"]] = "correct"
         _record(s, st, text, verdict, before_risk, "단계 행동 확인")
-        _consequence(s, st, True, out)
+        _record_success_condition(s, st, out)
         out += _go_next(s, st["next_if_correct"])
         return out
 
-    if verdict == "wrong":
-        s.risk += st["if_wrong"]["risk_delta"]
-        _say(s, out, "narrator", "상황", st["if_wrong"]["narration"])
-
-    if s.risk >= s.scenario["max_risk"]:
-        s.stage_results[st["stage"]] = "failed"
-        s.status = "failed"
-        _record(s, st, text, verdict, before_risk, "위험도 한도로 종료")
-        _say(s, out, "system", "결과",
-             "위험도가 한계를 넘었습니다. 구조대에 의해 구조되었지만 대피에는 실패했어요. 리포트에서 어떤 판단이 필요했는지 확인해 보세요.")
-    elif s.turns_in_stage >= MAX_TURNS_PER_STAGE:
-        s.stage_results[st["stage"]] = "failed"
-        _record(s, st, text, verdict, before_risk, "판단 기회 소진 · 도움받아 이동")
-        _consequence(s, st, False, out)
-        out += _go_next(s, st["next_if_correct"])
-    else:
-        _record(s, st, text, verdict, before_risk, "위험 행동" if verdict == "wrong" else "행동 추가 확인 필요")
+    _record(s, st, text, verdict, before_risk, interaction or "행동 추가 확인 필요")
     return out
+
+
+def partial_progress(s: Session, st: dict) -> tuple[list[str], dict]:
+    if s.status != 'playing':
+        return [], {}
+    confirmed = [item for item in st.get('rubric', []) if item['id'] in s.evidence.get(st['stage'], {})]
+    scene = next((item['partial_scene'] for item in reversed(confirmed) if item.get('partial_scene')), {})
+    return [item['label'] for item in confirmed], scene
+
+
+def _apply_partial(s: Session, st: dict, ch: dict, text: str, fresh: list[str], missing: list[dict], out: list[dict]) -> None:
+    number = st['stage']
+    s.evidence.setdefault(number, {}).update(dict.fromkeys(fresh, text))
+    s.actions.setdefault(number, []).append(text)
+    labels, scene = partial_progress(s, st)
+    description = scene.get('situation') or f'지금까지 확인한 행동 · {" · ".join(labels)}'
+    _say(s, out, 'narrator', '행동 확인', description)
+    out[-1]['outcome_image'] = scene.get('image') or st.get('image')
+    out[-1]['scene_kind'] = 'partial'
+    polite = '존댓말' in ch.get('speech_style', '')
+    fallback = '말씀하신 대로 했습니다. 이어서 무엇을 확인할까요?' if polite else '말한 대로 했어. 지금 상황에서 뭘 더 살펴볼까?'
+    _say(s, out, 'character', ch['name'], missing[0].get('hint') or fallback)
+    _record(s, st, text, 'unclear', s.risk, description)
+
+
+def _apply_danger(s: Session, st: dict, ch: dict, text: str, danger: dict, out: list[dict]) -> None:
+    before_risk = s.risk
+    if st.get('rubric'):
+        s.evidence[st['stage']] = {}
+    s.actions.setdefault(st['stage'], []).append(text)
+    s.turns_in_stage += 1
+    s.risk += danger['risk_delta']
+    _say(s, out, 'narrator', '상황', danger['narration'])
+    out[-1]['outcome_image'] = danger.get('image') or st.get('image')
+    _say(s, out, 'character', ch['name'], danger.get('reply') or st['reactions']['wrong'])
+    _record(s, st, text, 'wrong', before_risk, danger['narration'])
+    if s.risk >= s.scenario['max_risk']:
+        s.stage_results[st['stage']] = 'failed'
+        s.status = 'failed'
+        _say(s, out, 'system', '결과',
+             '누적된 위험으로 더 진행하기 어려워 구조대가 개입했습니다. 리포트에서 어떤 일이 있었는지 돌아보세요.')
 
 
 def _record(s: Session, st: dict, text: str, verdict: str, before: int, outcome: str) -> None:
@@ -302,11 +340,11 @@ def _record(s: Session, st: dict, text: str, verdict: str, before: int, outcome:
                        "outcome": outcome})
 
 
-def _consequence(s: Session, st: dict, success: bool, out: list[dict]) -> None:
+def _record_success_condition(s: Session, st: dict, out: list[dict]) -> None:
     effect = st.get("consequence")
     if effect:
-        s.conditions[effect["key"]] = "success" if success else "missed"
-        _say(s, out, "narrator", "선택의 결과", effect["success" if success else "missed"])
+        s.conditions[effect["key"]] = "success"
+        _say(s, out, "narrator", "선택의 결과", effect["success"])
 
 
 def public_conditions(s: Session) -> list[str]:
@@ -318,7 +356,7 @@ def _go_next(s: Session, next_stage: int | None) -> list[dict]:
     if next_stage is None:
         s.status = "cleared"
         out: list[dict] = []
-        _say(s, out, "system", "결과", "건물 밖에서 플레이를 마쳤습니다. 대피 결과와 별개로, 리포트에서 확인된 행동과 도움받은 판단을 살펴보세요.")
+        _say(s, out, "system", "결과", "플레이를 마쳤습니다. 리포트에서 선택한 행동과 그 결과를 살펴보세요.")
         return out
     s.stage_index = next(i for i, x in enumerate(s.scenario["stages"]) if x["stage"] == next_stage)
     s.turns_in_stage = 0
@@ -335,11 +373,13 @@ def _ai_context(s: Session, st: dict, user_text: str = '') -> dict:
     - story_so_far: 지난 단계에서 일어난 일 → 대화가 단계마다 끊기지 않게
     """
     done = s.evidence.get(st["stage"], {})
+    _, partial = partial_progress(s, st)
+    last_danger = next((event['outcome'] for event in reversed(s.timeline)
+                        if event['stage'] == st['stage'] and event['verdict'] == 'wrong'), '')
     rubric = st.get("rubric", [])
     observed = set(rules.observe(st, user_text))
-    danger = rules.dangerous(st, user_text)
-    combined = set(done) | (observed if not danger else set())
-    preview = 'wrong' if danger else 'correct' if rubric and all(item['id'] in combined for item in rubric) else 'unclear'
+    combined = set(done) | observed
+    preview = 'correct' if rubric and all(item['id'] in combined for item in rubric) else 'unclear'
     story = []
     for prev in s.scenario["stages"][:s.stage_index]:
         result = s.stage_results.get(prev["stage"])
@@ -347,6 +387,7 @@ def _ai_context(s: Session, st: dict, user_text: str = '') -> dict:
                      + ("이용자가 직접 해냄" if result == "correct" else "이용자가 놓쳐서 다른 사람의 도움을 받음"))
     return {
         **st,
+        'situation': partial.get('situation') or st['situation'],
         "world_state": dict(s.conditions),
         "world_facts": list(s.scenario.get("role_doc", {}).get("world_facts", [])) + list(st.get("facts", [])),
         "confirmed_actions": [item["label"] for item in rubric if item["id"] in done],
@@ -354,6 +395,7 @@ def _ai_context(s: Session, st: dict, user_text: str = '') -> dict:
         'observed_this_turn': [item['label'] for item in rubric if item['id'] in observed],
         'missing_after_turn': [item['label'] for item in rubric if item['id'] not in combined],
         'server_preview': preview,
+        'previous_danger_outcome': last_danger,
         "story_so_far": story,
     }
 

@@ -132,8 +132,27 @@ def check(sc: dict) -> dict:
             errors.append(f"{where} > 틀렸을 때: 정보가 없습니다.")
         else:
             _text(errors, f"{where} > 틀렸을 때 전개", wrong.get("narration"))
+            _text(errors, f"{where} > 틀렸을 때 반응 대사", wrong.get("reply"), required=False)
+            _text(errors, f"{where} > 틀렸을 때 이미지", wrong.get("image"), required=False)
             if not isinstance(wrong.get("risk_delta"), int) or not 0 <= wrong["risk_delta"] <= 10:
                 errors.append(f"{where} > 틀렸을 때 위험도: 0~10 정수")
+            events = wrong.get('events', [])
+            if not isinstance(events, list):
+                errors.append(f'{where} > 위험 행동별 결과: 목록이어야 합니다.')
+                events = []
+            for index, event in enumerate(events, start=1):
+                w = f'{where} > 위험 행동별 결과 {index}'
+                if not isinstance(event, dict):
+                    errors.append(f'{w}: 형식 오류')
+                    continue
+                _text(errors, f'{w} > 전개', event.get('narration'))
+                _text(errors, f'{w} > 반응 대사', event.get('reply'), required=False)
+                _text(errors, f'{w} > 결과 이미지', event.get('image'), required=False)
+                if not isinstance(event.get('risk_delta'), int) or not 0 <= event['risk_delta'] <= 10:
+                    errors.append(f'{w} > 위험도: 0~10 정수')
+                for key in ('patterns', 'exclude'):
+                    for pattern in _str_list(errors, f'{w} > {key}', event.get(key), required=key == 'patterns'):
+                        _regex(errors, f'{w} > {key}', pattern)
         reactions = st.get("reactions")
         if not isinstance(reactions, dict):
             errors.append(f"{where} > 예비 대사: 정보가 없습니다.")
@@ -165,6 +184,14 @@ def check(sc: dict) -> dict:
             else:
                 rubric_ids.add(item["id"])
             _text(errors, f"{w} > 이름", item.get("label"))
+            _text(errors, f"{w} > 이 행동이 남았을 때 힌트", item.get('hint'), required=False)
+            if 'partial_scene' in item:
+                partial = item['partial_scene']
+                if not isinstance(partial, dict):
+                    errors.append(f'{w} > 중간 장면: 형식 오류')
+                else:
+                    _text(errors, f'{w} > 중간 장면 이미지', partial.get('image'))
+                    _text(errors, f'{w} > 중간 장면 설명', partial.get('situation'))
             groups = item.get("patterns")
             if not isinstance(groups, list) or not groups or not all(isinstance(g, list) and g for g in groups):
                 errors.append(f"{w} > 인정할 표현: 표현 묶음이 하나 이상 필요합니다.")

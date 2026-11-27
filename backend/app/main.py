@@ -48,13 +48,16 @@ def _turn(s: harness.Session, messages: list[dict], action_scene: ActionScene | 
         speaker_image = next((c.get("image") for c in sc.get("characters", [])
                               if c["id"] == speaker["id"] and c["name"] == speaker["name"]), None)
     ending_image = s.scenario.get("cleared_image") if s.status == "cleared" else None
+    confirmed, partial = harness.partial_progress(s, st)
     return Turn(
         session_id=s.id, messages=messages,
         stage=st["stage"], stage_title=st["title"], total_stages=len(s.scenario["stages"]),
-        situation=st["situation"], speaker=speaker["name"], speaker_image=speaker_image,
-        risk=s.risk, max_risk=s.scenario["max_risk"], image=ending_image or st.get("image"), status=s.status,
-        image_includes_speaker=bool(ending_image or st.get("image_includes_speaker")), action_scene=action_scene,
-        conditions=harness.public_conditions(s), attempts_left=max(0, harness.MAX_TURNS_PER_STAGE - s.turns_in_stage) if s.status == "playing" else 0,
+        situation=partial.get('situation') or st["situation"], speaker=speaker["name"], speaker_image=speaker_image,
+        risk=s.risk, max_risk=s.scenario["max_risk"], image=ending_image or partial.get('image') or st.get("image"), status=s.status,
+        image_includes_speaker=bool(ending_image or partial.get('image') or st.get("image_includes_speaker")), action_scene=action_scene,
+        confirmed_actions=confirmed,
+        conditions=harness.public_conditions(s), stage_mistakes=s.turns_in_stage,
+        attempts_left=max(0, harness.LEGACY_ATTEMPTS_PER_STAGE - s.turns_in_stage) if s.status == "playing" else 0,
     )
 
 
@@ -125,6 +128,12 @@ def send_message(session_id: str, req: MessageRequest):
         messages = harness.handle_message(s, req.text, persist_result=False)
         advanced = s.status == "cleared" or harness.current_stage(s)["stage"] != stage["stage"]
         action_scene = _action_scene(s, stage, messages) if advanced else None
+        if action_scene is None:
+            for index, message in enumerate(messages, start=1):
+                if image := message.get('outcome_image'):
+                    action_scene = ActionScene(image=image, description=message['text'], message_count=index,
+                                               kind=message.get('scene_kind', 'outcome'))
+                    break
         response = _turn(s, messages, action_scene)
         if req.request_id:
             s.processed_requests[req.request_id] = {'text': req.text, 'response': response.model_dump()}
